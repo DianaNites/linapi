@@ -3,7 +3,7 @@
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat)](https://github.com/RichardLitt/standard-readme)
 [![linapi crates.io version and link](https://img.shields.io/crates/v/linapi.svg)](https://crates.io/crates/linapi)
 ![linapi Crates.io license](https://img.shields.io/crates/l/linapi)
-![https://docs.rs/linapi/badge.svg](https://docs.rs/linapi)
+[![linapi docs.rs badge](https://docs.rs/linapi/badge.svg)](https://docs.rs/linapi)
 
 > High level bindings to various Linux APIs and interfaces
 
