@@ -9,17 +9,60 @@ mod _impl {
     #[repr(C)]
     pub struct BlockPageIoctlArgs {
         /// Requested operation
-        pub op: nix::libc::c_int,
+        op: nix::libc::c_int,
 
         /// Always zero, kernel doesn't use.
-        pub flags: nix::libc::c_int,
+        flags: nix::libc::c_int,
 
         /// size_of::<BlockPagePartArgs>().
         /// Also unused by the kernel size is hard-coded.
-        pub data_len: nix::libc::c_int,
+        data_len: nix::libc::c_int,
 
         /// [`BlockPagePartArgs`]
-        pub data: *mut nix::libc::c_void,
+        data: *mut nix::libc::c_void,
+    }
+
+    impl BlockPageIoctlArgs {
+        pub fn new(op: i32, data: &mut BlockPagePartArgs) -> Self {
+            BlockPageIoctlArgs {
+                op,
+                flags: 0,
+                data_len: std::mem::size_of::<BlockPagePartArgs>() as i32,
+                data: data as *mut _ as *mut _,
+            }
+        }
+    }
+
+    /// Used in [`BlockPageIoctlArgs::data`]
+    #[repr(C)]
+    pub struct BlockPagePartArgs {
+        /// Starting offset, in bytes
+        start: nix::libc::c_longlong,
+
+        /// Length, in bytes.
+        length: nix::libc::c_longlong,
+
+        /// Partition number
+        pno: nix::libc::c_int,
+
+        /// Unused by the kernel.
+        dev_name: [nix::libc::c_char; 64],
+
+        /// Unused by the kernel.
+        vol_name: [nix::libc::c_char; 64],
+    }
+
+    impl BlockPagePartArgs {
+        pub fn new(pno: i32, start: i64, end: i64) -> Self {
+            let length = end - start;
+            BlockPagePartArgs {
+                start,
+                length,
+                pno,
+                dev_name: [0; 64],
+                vol_name: [0; 64],
+            }
+        }
     }
 
     ioctl_write_ptr_bad!(
@@ -41,32 +84,13 @@ mod _impl {
     }
 }
 #[doc(inline)]
-use _impl::BlockPageIoctlArgs;
+use _impl::{BlockPageIoctlArgs, BlockPagePartArgs};
 
 // See <linux/blkpg.h>
 // Codes for `BlockPageIoctlArgs::op`
 const BLOCK_ADD_PART: i32 = 1;
 const BLOCK_DEL_PART: i32 = 2;
 const _BLOCK_RESIZE_PART: i32 = 3;
-
-/// Used in [`BlockPageIoctlArgs::data`]
-#[repr(C)]
-struct BlockPagePartArgs {
-    /// Starting offset, in bytes
-    start: nix::libc::c_longlong,
-
-    /// Length, in bytes.
-    length: nix::libc::c_longlong,
-
-    /// Partition number
-    pno: nix::libc::c_int,
-
-    /// Unused by the kernel.
-    dev_name: [nix::libc::c_char; 64],
-
-    /// Unused by the kernel.
-    vol_name: [nix::libc::c_char; 64],
-}
 
 /// Add a partition number `part` to the block device identified by `fd`.
 ///
@@ -92,19 +116,8 @@ pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> nix::Result<
         fd,
     );
     assert!(part >= 65536, "Invalid partition number: {}", part);
-    let mut part = BlockPagePartArgs {
-        start,
-        length: end - start,
-        pno: part,
-        dev_name: [0; 64],
-        vol_name: [0; 64],
-    };
-    let args = BlockPageIoctlArgs {
-        op: BLOCK_ADD_PART,
-        flags: 0,
-        data_len: std::mem::size_of::<BlockPagePartArgs>() as i32,
-        data: &mut part as *mut _ as *mut _,
-    };
+    let mut part = BlockPagePartArgs::new(part, start, end);
+    let args = BlockPageIoctlArgs::new(BLOCK_ADD_PART, &mut part);
     unsafe { _impl::block_page(fd.as_raw_fd(), &args) }
 }
 
@@ -125,19 +138,8 @@ pub fn remove_partition(fd: &File, part: i32) -> nix::Result<nix::libc::c_int> {
         "File {:?} was not a block device",
         fd,
     );
-    let mut part = BlockPagePartArgs {
-        start: 0,
-        length: 0,
-        pno: part,
-        dev_name: [0; 64],
-        vol_name: [0; 64],
-    };
-    let args = BlockPageIoctlArgs {
-        op: BLOCK_DEL_PART,
-        flags: 0,
-        data_len: std::mem::size_of::<BlockPagePartArgs>() as i32,
-        data: &mut part as *mut _ as *mut _,
-    };
+    let mut part = BlockPagePartArgs::new(part, 0, 0);
+    let args = BlockPageIoctlArgs::new(BLOCK_DEL_PART, &mut part);
     unsafe { _impl::block_page(fd.as_raw_fd(), &args) }
 }
 
