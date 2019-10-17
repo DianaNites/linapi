@@ -3,7 +3,6 @@ name = "linapi"
 version = "0.1.0"
 authors = ["Diana"]
 edition = "2018"
-publish = false
 #
 license = "MIT OR Apache-2.0"
 description = "High level bindings to various Linux APIs and interfaces"
