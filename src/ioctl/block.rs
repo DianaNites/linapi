@@ -169,7 +169,7 @@ pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
 ///
 /// - if `fd` is not a block device
 #[deprecated = "BLKRRPART has been superseded by BLKPG"]
-pub fn reread_partition(fd: &File) -> nix::Result<nix::libc::c_int> {
+pub fn reread_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
     assert!(
         fd.metadata().unwrap().file_type().is_block_device(),
         "File {:?} was not a block device",
