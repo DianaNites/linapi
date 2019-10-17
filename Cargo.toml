@@ -7,7 +7,20 @@ publish = false
 #
 license = "MIT OR Apache-2.0"
 description = "High level bindings to various Linux APIs and interfaces"
+documentation = "https://docs.rs/linapi"
+repository = "https://github.com/DianaNites/linapi"
+readme = "README.md"
+keywords = [
+    "linux",
+]
+categories = [
+    "api-bindings",
+    "os::unix-apis",
+]
 
 [dependencies]
 nix = "0.15.0"
 libc = "0.2.64"
+
+[badges]
+maintenance = { status = "experimental" }
