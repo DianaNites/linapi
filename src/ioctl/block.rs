@@ -5,6 +5,23 @@ use std::os::unix::prelude::*;
 
 mod _impl {
     use nix::*;
+    /// Argument to the [`block_page`] ioctl.
+    #[repr(C)]
+    pub struct BlockPageIoctlArgs {
+        /// Requested operation
+        pub op: nix::libc::c_int,
+
+        /// Always zero, kernel doesn't use.
+        pub flags: nix::libc::c_int,
+
+        /// size_of::<BlockPagePartArgs>().
+        /// Also unused by the kernel size is hard-coded.
+        pub data_len: nix::libc::c_int,
+
+        /// [`BlockPagePartArgs`]
+        pub data: *mut nix::libc::c_void,
+    }
+
     ioctl_write_ptr_bad!(
         /// The `blkpg` ioctl, defined in
         /// <linux/blkpg.h>
@@ -15,30 +32,14 @@ mod _impl {
         super::BlockPageIoctlArgs
     );
 }
+#[doc(inline)]
+use _impl::BlockPageIoctlArgs;
 
 // See <linux/blkpg.h>
 // Codes for `BlockPageIoctlArgs::op`
 const BLOCK_ADD_PART: i32 = 1;
 const BLOCK_DEL_PART: i32 = 2;
 const _BLOCK_RESIZE_PART: i32 = 3;
-
-/// Argument to the `block_page` ioctl.
-#[repr(C)]
-// `pub` because of `nix`.
-pub struct BlockPageIoctlArgs {
-    /// Requested operation
-    op: nix::libc::c_int,
-
-    /// Always zero, kernel doesn't use.
-    flags: nix::libc::c_int,
-
-    /// size_of::<BlockPagePartArgs>().
-    /// Also unused by the kernel size is hard-coded.
-    data_len: nix::libc::c_int,
-
-    /// [`BlockPagePartArgs`]
-    data: *mut nix::libc::c_void,
-}
 
 /// Used in [`BlockPageIoctlArgs::data`]
 #[repr(C)]
