@@ -23,7 +23,7 @@ mod _impl {
     }
 
     ioctl_write_ptr_bad!(
-        /// The `blkpg` ioctl, defined in
+        /// The `BLKPG` ioctl, defined in
         /// <linux/blkpg.h>
         ///
         /// Incorrectly defined as `_IO`, actually takes one argument
@@ -69,6 +69,8 @@ struct BlockPagePartArgs {
 /// This will usually be the case, as most partition tables also require this.
 /// If this is not the case, your `start` is likely invalid.
 ///
+/// This uses the `BLKPG` ioctl.
+///
 /// # Errors
 ///
 /// # Panics
@@ -99,6 +101,8 @@ pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> nix::Result<
 }
 
 /// Remove a partition number `part` from the block device at `fd`.
+///
+/// This uses the `BLKPG` ioctl.
 ///
 /// # Errors
 ///
