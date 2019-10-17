@@ -1,7 +1,4 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+//! High level bindings to various Linux APIs and interfaces
+
+pub mod ioctl;
+pub mod types;
