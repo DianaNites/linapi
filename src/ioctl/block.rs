@@ -1,5 +1,7 @@
 //! Block device `ioctl`s.
 use crate::types::*;
+use std::fs::File;
+use std::os::unix::prelude::*;
 // TODO: Proper error types
 
 mod _impl {
@@ -61,7 +63,7 @@ struct BlockPagePartArgs {
 /// Add a partition number `part` to the block device identified by `fd`.
 ///
 /// The partition starts at `start` bytes and ends at `end` bytes.
-/// This is an offset from the start of the `fd`.
+/// This is an offset from the start of the `fd`. Note that `end` is exclusive.
 ///
 /// The kernel requires that partitions be aligned to the logical block size.
 /// This will usually be the case, as most partition tables also require this.
@@ -72,12 +74,13 @@ struct BlockPagePartArgs {
 /// # Panics
 ///
 /// - If `part` is >= 65536.
-pub fn add_partition(
-    fd: FileDescriptor,
-    part: i32,
-    start: i64,
-    end: i64,
-) -> nix::Result<nix::libc::c_int> {
+/// - if `fd` is not a block device.
+pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> nix::Result<nix::libc::c_int> {
+    assert!(
+        fd.metadata().unwrap().file_type().is_block_device(),
+        "File {:?} was not a block device",
+        fd,
+    );
     assert!(part >= 65536, "Invalid partition number: {}", part);
     let mut part = BlockPagePartArgs {
         start,
@@ -92,7 +95,7 @@ pub fn add_partition(
         data_len: std::mem::size_of::<BlockPagePartArgs>() as i32,
         data: &mut part as *mut _ as *mut _,
     };
-    unsafe { _impl::block_page(fd.0, &args) }
+    unsafe { _impl::block_page(fd.as_raw_fd(), &args) }
 }
 
 /// Remove a partition number `part` from the block device at `fd`.
@@ -100,7 +103,16 @@ pub fn add_partition(
 /// # Errors
 ///
 /// - If `part` doesn't exist. Safe to ignore.
-pub fn remove_partition(fd: FileDescriptor, part: i32) -> nix::Result<nix::libc::c_int> {
+///
+/// # Panics
+///
+/// - if `fd` is not a block device.
+pub fn remove_partition(fd: &File, part: i32) -> nix::Result<nix::libc::c_int> {
+    assert!(
+        fd.metadata().unwrap().file_type().is_block_device(),
+        "File {:?} was not a block device",
+        fd,
+    );
     let mut part = BlockPagePartArgs {
         start: 0,
         length: 0,
@@ -114,12 +126,16 @@ pub fn remove_partition(fd: FileDescriptor, part: i32) -> nix::Result<nix::libc:
         data_len: std::mem::size_of::<BlockPagePartArgs>() as i32,
         data: &mut part as *mut _ as *mut _,
     };
-    unsafe { _impl::block_page(fd.0, &args) }
+    unsafe { _impl::block_page(fd.as_raw_fd(), &args) }
 }
 
 /// Convenience function to remove existing partitions before
 /// calling `add_partition`. Ignores missing partitions.
-pub fn remove_existing_partitions(fd: FileDescriptor) -> nix::Result<nix::libc::c_int> {
+///
+/// # Panics
+///
+/// - if `fd` is not a block device.
+pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
     for i in 1..=64 {
         match remove_partition(fd, i) {
             Ok(_) => (),
