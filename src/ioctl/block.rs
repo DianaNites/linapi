@@ -1,5 +1,4 @@
 //! Block device `ioctl`s.
-use crate::types::*;
 use std::fs::File;
 use std::os::unix::prelude::*;
 // TODO: Proper error types
