@@ -31,6 +31,14 @@ mod _impl {
         0x1269,
         super::BlockPageIoctlArgs
     );
+
+    ioctl_none! {
+        /// The `BLKRRPART` ioctl, defined in
+        /// <linux/fs.h>
+        block_reread_part,
+        0x12,
+        95
+    }
 }
 #[doc(inline)]
 use _impl::BlockPageIoctlArgs;
@@ -148,4 +156,24 @@ pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
         }
     }
     Ok(0)
+}
+
+/// Tell the kernel to re-read the partition table.
+/// This call may be unreliable and require reboots.
+///
+/// you may instead want the newer [`add_partition`], or [`remove_partition`]
+///
+/// This uses the `BLKRRPART` ioctl.
+///
+/// # Panics
+///
+/// - if `fd` is not a block device
+#[deprecated = "BLKRRPART has been superseded by BLKPG"]
+pub fn reread_partition(fd: &File) -> nix::Result<nix::libc::c_int> {
+    assert!(
+        fd.metadata().unwrap().file_type().is_block_device(),
+        "File {:?} was not a block device",
+        fd,
+    );
+    unsafe { _impl::block_reread_part(fd.as_raw_fd()) }
 }
