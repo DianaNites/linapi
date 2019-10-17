@@ -10,6 +10,8 @@
 This crate provides high-level, safe, Rust bindings to
 the various Linux Kernel APIs and interfaces.
 
+This crate is currently experimental, and the API will change.
+
 ## Background
 
 The goal of this crate is to provide relatively high-level bindings,
