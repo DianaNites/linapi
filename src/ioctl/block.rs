@@ -1,6 +1,8 @@
 //! Block device `ioctl`s.
+use nix::{libc::c_int, Result as NixResult};
 use std::{fs::File, os::unix::prelude::*};
-// TODO: Proper error types
+
+type Result = NixResult<c_int>;
 
 mod _impl {
     use nix::{
@@ -113,7 +115,7 @@ const _BLOCK_RESIZE_PART: i32 = 3;
 ///
 /// - If `part` is >= 65536.
 /// - if `fd` is not a block device.
-pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> nix::Result<nix::libc::c_int> {
+pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> Result {
     assert!(
         fd.metadata().unwrap().file_type().is_block_device(),
         "File {:?} was not a block device",
@@ -136,7 +138,7 @@ pub fn add_partition(fd: &File, part: i32, start: i64, end: i64) -> nix::Result<
 /// # Panics
 ///
 /// - if `fd` is not a block device.
-pub fn remove_partition(fd: &File, part: i32) -> nix::Result<nix::libc::c_int> {
+pub fn remove_partition(fd: &File, part: i32) -> Result {
     assert!(
         fd.metadata().unwrap().file_type().is_block_device(),
         "File {:?} was not a block device",
@@ -153,7 +155,7 @@ pub fn remove_partition(fd: &File, part: i32) -> nix::Result<nix::libc::c_int> {
 /// # Panics
 ///
 /// - if `fd` is not a block device.
-pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
+pub fn remove_existing_partitions(fd: &File) -> Result {
     for i in 1..=64 {
         match remove_partition(fd, i) {
             Ok(_) => (),
@@ -175,7 +177,7 @@ pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
 ///
 /// - if `fd` is not a block device
 #[deprecated = "BLKRRPART has been superseded by BLKPG"]
-pub fn reread_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
+pub fn reread_partitions(fd: &File) -> Result {
     assert!(
         fd.metadata().unwrap().file_type().is_block_device(),
         "File {:?} was not a block device",
