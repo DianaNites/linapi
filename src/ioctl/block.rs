@@ -1,25 +1,28 @@
 //! Block device `ioctl`s.
-use std::fs::File;
-use std::os::unix::prelude::*;
+use std::{fs::File, os::unix::prelude::*};
 // TODO: Proper error types
 
 mod _impl {
-    use nix::*;
+    use nix::{
+        libc::{c_char, c_int, c_longlong, c_void},
+        *,
+    };
+
     /// Argument to the [`block_page`] ioctl.
     #[repr(C)]
     pub struct BlockPageIoctlArgs {
         /// Requested operation
-        op: nix::libc::c_int,
+        op: c_int,
 
         /// Always zero, kernel doesn't use.
-        flags: nix::libc::c_int,
+        flags: c_int,
 
         /// size_of::<BlockPagePartArgs>().
         /// Also unused by the kernel size is hard-coded.
-        data_len: nix::libc::c_int,
+        data_len: c_int,
 
         /// [`BlockPagePartArgs`]
-        data: *mut nix::libc::c_void,
+        data: *mut c_void,
     }
 
     impl BlockPageIoctlArgs {
@@ -37,28 +40,28 @@ mod _impl {
     #[repr(C)]
     pub struct BlockPagePartArgs {
         /// Starting offset, in bytes
-        start: nix::libc::c_longlong,
+        start: c_longlong,
 
         /// Length, in bytes.
-        length: nix::libc::c_longlong,
+        length: c_longlong,
 
         /// Partition number
-        pno: nix::libc::c_int,
+        part_num: c_int,
 
         /// Unused by the kernel.
-        dev_name: [nix::libc::c_char; 64],
+        dev_name: [c_char; 64],
 
         /// Unused by the kernel.
-        vol_name: [nix::libc::c_char; 64],
+        vol_name: [c_char; 64],
     }
 
     impl BlockPagePartArgs {
-        pub fn new(pno: i32, start: i64, end: i64) -> Self {
+        pub fn new(part_num: i32, start: i64, end: i64) -> Self {
             let length = end - start;
             BlockPagePartArgs {
                 start,
                 length,
-                pno,
+                part_num,
                 dev_name: [0; 64],
                 vol_name: [0; 64],
             }
@@ -83,6 +86,7 @@ mod _impl {
         95
     }
 }
+
 #[doc(inline)]
 use _impl::{BlockPageIoctlArgs, BlockPagePartArgs};
 
@@ -163,7 +167,7 @@ pub fn remove_existing_partitions(fd: &File) -> nix::Result<nix::libc::c_int> {
 /// Tell the kernel to re-read the partition table.
 /// This call may be unreliable and require reboots.
 ///
-/// you may instead want the newer [`add_partition`], or [`remove_partition`]
+/// You may instead want the newer [`add_partition`], or [`remove_partition`]
 ///
 /// This uses the `BLKRRPART` ioctl.
 ///
