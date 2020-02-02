@@ -96,7 +96,6 @@ use _impl::{BlockPageIoctlArgs, BlockPagePartArgs};
 // Codes for `BlockPageIoctlArgs::op`
 const BLOCK_ADD_PART: i32 = 1;
 const BLOCK_DEL_PART: i32 = 2;
-const _BLOCK_RESIZE_PART: i32 = 3;
 
 /// Add a partition number `part` to the block device identified by `fd`.
 ///
@@ -156,6 +155,7 @@ pub fn remove_partition(fd: &File, part: i32) -> Result {
 ///
 /// - if `fd` is not a block device.
 pub fn remove_existing_partitions(fd: &File) -> Result {
+    // TODO: Why 64? Why not more? Is there a limit?
     for i in 1..=64 {
         match remove_partition(fd, i) {
             Ok(_) => (),
