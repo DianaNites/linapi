@@ -18,8 +18,8 @@ categories = [
 ]
 
 [dependencies]
-nix = "0.15.0"
-libc = "0.2.64"
+nix = "0.16.1"
+libc = "0.2.66"
 
 [badges]
 maintenance = { status = "experimental" }
