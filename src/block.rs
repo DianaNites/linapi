@@ -1,26 +1,36 @@
 //! An interface to Block Devices
+use crate::sysfs::SYSFS_PATH;
 use std::{
     fs::{self, DirEntry},
     io::prelude::*,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-const SYS_ROOT: &str = "/sys";
+mod _impl {
+    use nix::{
+        libc::{c_char, c_int, c_longlong, c_void},
+        *,
+    };
 
-// TODO: What attributes do all block devices have?
-pub struct Device {
-    major: u32,
-    minor: u32,
-    removable: bool,
+    ioctl_read! {
+        /// The `BLKGETSIZE64` ioctl.
+        block_device_size_bytes, 0x12, 114, u64
+    }
 }
 
 /// Get connected devices
 ///
 /// # Panics
 ///
-/// - If reading `/sys` somehow.
-pub fn get_devices() -> Vec<Device> {
-    for dir in fs::read_dir(Path::new(SYS_ROOT).join("dev/block")).unwrap() {
+/// - If reading `/sys` does, somehow.
+pub fn get_devices() -> Vec<()> {
+    let path = Path::new(SYSFS_PATH).join("dev/block");
+
+    // if `/sys/subsystem` exists, use it.
+    let dir = Path::new(SYSFS_PATH).join("subsystem");
+    let path = fs::metadata(&dir).map_or(path, |_| dir);
+
+    for dir in fs::read_dir(path).unwrap() {
         let dir: DirEntry = dir.unwrap();
         //
     }
