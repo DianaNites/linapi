@@ -402,6 +402,11 @@ impl ModuleFile {
     ///
     /// Force loading a kernel module is dangerous, it skips important safety
     /// checks that help ensure module compatibility with your kernel.
+    ///
+    /// # Note
+    ///
+    /// Kernel modules may be compressed, and depending on crate features this
+    /// function may automatically decompress it.
     pub unsafe fn force_load(&self, param: &str) -> LoadedModule {
         let file = fs::File::open(&self.path).unwrap();
         finit_module(
@@ -428,6 +433,9 @@ impl ModuleFile {
     ///
     /// This uses the `.modinfo` ELF section, which seems to be entirely
     /// undocumented.
+    ///
+    /// Kernel modules also may be compressed, and depending on crate features,
+    /// this function may automatically decompress it.
     pub fn info(&self) -> ModInfo {
         let f = fs::read(&self.path).unwrap();
         let elf = Elf::parse(&f).unwrap();
