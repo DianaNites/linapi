@@ -1,5 +1,5 @@
-//! Common utility functions
-use super::interfaces::UEventAction;
+//! Utility functions
+use crate::types::UEventAction;
 use std::{collections::HashMap, fs, io::prelude::*, path::Path};
 
 /// Read a uevent file

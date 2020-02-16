@@ -1,16 +1,12 @@
 //! An interface to Block Devices
-use crate::sysfs::SYSFS_PATH;
+use crate::types::SYSFS_PATH;
 use std::{
     fs::{self, DirEntry},
-    io::prelude::*,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 mod _impl {
-    use nix::{
-        libc::{c_char, c_int, c_longlong, c_void},
-        *,
-    };
+    use nix::*;
 
     ioctl_read! {
         /// The `BLKGETSIZE64` ioctl.
@@ -31,7 +27,7 @@ pub fn get_devices() -> Vec<()> {
     let path = fs::metadata(&dir).map_or(path, |_| dir);
 
     for dir in fs::read_dir(path).unwrap() {
-        let dir: DirEntry = dir.unwrap();
+        let _dir: DirEntry = dir.unwrap();
         //
     }
     todo!()
