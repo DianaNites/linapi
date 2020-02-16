@@ -11,6 +11,8 @@ repository = "https://github.com/DianaNites/linapi"
 readme = "README.md"
 keywords = [
     "linux",
+    "kernel",
+    "modules",
 ]
 categories = [
     "api-bindings",
