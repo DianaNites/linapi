@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- xz compression support
+- New extensions to `std::fs::File`,
+  `create_memory` which allows having a File Descriptor without a file on disk!
+
 ## [0.2.3] - 2020-02-16
 
 ## [0.2.2] - 2020-02-16
