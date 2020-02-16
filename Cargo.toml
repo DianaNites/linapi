@@ -26,6 +26,7 @@ bitflags = "1.2.1"
 walkdir = "2.3.1"
 goblin = "0.2.0"
 lzma-rs = "0.1.2"
+flate2 = "1.0.13"
 
 [badges]
 maintenance = { status = "experimental" }

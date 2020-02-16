@@ -41,6 +41,7 @@ use crate::{
         SYSFS_PATH,
     },
 };
+use flate2::read::GzDecoder;
 use goblin::elf::{section_header::SHT_PROGBITS, Elf};
 use lzma_rs::xz_decompress;
 use nix::{
@@ -573,7 +574,11 @@ impl ModuleFile {
                     xz_decompress(&mut data, &mut v).unwrap();
                     v
                 }
-                "gz" => todo!(),
+                "gz" => {
+                    let mut data = GzDecoder::new(data.as_slice());
+                    data.read_to_end(&mut v).unwrap();
+                    v
+                }
                 "ko" => data,
                 _ => panic!("Unsupported/Unknown compression?"),
             }
