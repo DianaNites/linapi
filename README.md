@@ -29,13 +29,17 @@ So this crate does the work of handling it for you!
 linapi = "0.2.1"
 ```
 
-## Dependencies
+### Dependencies
 
 - The Linux Kernel. This crate has only been tested with version `5.5.3`.
 
 ## Usage
 
 See the documentation for details
+
+## Changelog
+
+Please see [CHANGELOG](CHANGELOG.md) for version history
 
 ## Contributing
 
