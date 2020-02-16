@@ -31,14 +31,18 @@
 //!
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-module
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-module
-use crate::types::{
-    util::{read_uevent, write_uevent},
-    UEvent,
-    UEventAction,
-    MODULE_PATH,
-    SYSFS_PATH,
+use crate::{
+    extensions::FileExt,
+    types::{
+        util::{read_uevent, write_uevent},
+        UEvent,
+        UEventAction,
+        MODULE_PATH,
+        SYSFS_PATH,
+    },
 };
 use goblin::elf::{section_header::SHT_PROGBITS, Elf};
+use lzma_rs::xz_decompress;
 use nix::{
     kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
     sys::utsname::uname,
@@ -48,7 +52,7 @@ use std::{
     ffi::CString,
     fs,
     fs::DirEntry,
-    io::BufRead,
+    io::{prelude::*, BufRead},
     mem::size_of,
     path::{Path, PathBuf},
 };
@@ -386,6 +390,7 @@ impl ModuleFile {
     /// function may automatically decompress it.
     pub fn load(&self, param: &str) -> LoadedModule {
         let img = fs::read(&self.path).unwrap();
+        let img = self.decompress(img);
         init_module(&img, &CString::new(param).unwrap()).unwrap();
         LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
     }
@@ -408,7 +413,10 @@ impl ModuleFile {
     /// Kernel modules may be compressed, and depending on crate features this
     /// function may automatically decompress it.
     pub unsafe fn force_load(&self, param: &str) -> LoadedModule {
-        let file = fs::File::open(&self.path).unwrap();
+        let img = fs::read(&self.path).unwrap();
+        let mut file = fs::File::create_memory("decompressed module");
+        file.write_all(&self.decompress(img)).unwrap();
+        //
         finit_module(
             &file,
             &CString::new(param).unwrap(),
@@ -438,6 +446,8 @@ impl ModuleFile {
     /// this function may automatically decompress it.
     pub fn info(&self) -> ModInfo {
         let f = fs::read(&self.path).unwrap();
+        let f = self.decompress(f);
+        //
         let elf = Elf::parse(&f).unwrap();
         for header in elf.section_headers {
             if header.sh_type != SHT_PROGBITS {
@@ -549,6 +559,26 @@ impl ModuleFile {
             todo!()
         } else {
             None
+        }
+    }
+
+    /// Decompresses a kernel module
+    fn decompress(&self, data: Vec<u8>) -> Vec<u8> {
+        let mut v = Vec::new();
+        if let Some(ext) = self.path.extension() {
+            let ext = ext.to_str().unwrap();
+            match ext {
+                "xz" => {
+                    let mut data = std::io::BufReader::new(data.as_slice());
+                    xz_decompress(&mut data, &mut v).unwrap();
+                    v
+                }
+                "gz" => todo!(),
+                "ko" => data,
+                _ => panic!("Unsupported/Unknown compression?"),
+            }
+        } else {
+            panic!("Unsupported/Unknown compression?")
         }
     }
 }

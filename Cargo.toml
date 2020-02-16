@@ -25,6 +25,7 @@ libc = "0.2.66"
 bitflags = "1.2.1"
 walkdir = "2.3.1"
 goblin = "0.2.0"
+lzma-rs = "0.1.2"
 
 [badges]
 maintenance = { status = "experimental" }
