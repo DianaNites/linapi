@@ -5,7 +5,7 @@
 ![linapi Crates.io license](https://img.shields.io/crates/l/linapi)
 [![linapi docs.rs badge](https://docs.rs/linapi/badge.svg)](https://docs.rs/linapi)
 
-> High level bindings to various Linux APIs and interfaces
+High level bindings to various Linux APIs and interfaces
 
 This crate provides high-level, safe, Rust bindings to
 the various Linux Kernel APIs and interfaces.
@@ -15,8 +15,12 @@ This crate is currently experimental, and the API will change.
 ## Background
 
 The goal of this crate is to provide relatively high-level bindings,
-specifically for the Linux Kernel. From raw kernel APIs, to `ioctl`s, to
-the kernel filesystems.
+specifically for the Linux Kernel.
+
+The kernel exposes a lot of information through filesystems like `sysfs`,
+and there aren't a lot of good structured ways to handle it, on top of it being sparsely documented.
+
+So this crate does the work of handling it for you!
 
 ## Install
 
@@ -25,19 +29,20 @@ the kernel filesystems.
 linapi = "0.1.0"
 ```
 
+## Dependencies
+
+- The Linux Kernel. This crate has only been tested with version `5.5.3`.
+
 ## Usage
 
-TODO: Usage
-
-## API
-
-On [docs.rs](https://docs.rs/linapi)
+See the documentation for details
 
 ## Contributing
 
 This crate is not looking for contributors at this time.
 
-Feel free to ask questions and request bindings using github issues.
+However, feel free to ask questions and request bindings using github issues,
+or suggest/discuss API improvements.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
