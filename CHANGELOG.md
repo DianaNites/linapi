@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.2.2] - 2020-02-16
+
 ### Added
 
 - Changelog
@@ -47,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release. No notable features
 
 <!-- next-url -->
-[unreleased]: https://github.com/DianaNites/linapi/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.2.2...HEAD
+[unreleased]: https://github.com/DianaNites/linapi/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/DianaNites/linapi/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/DianaNites/linapi/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/DianaNites/linapi/compare/v0.1.0...v0.1.1
