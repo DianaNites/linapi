@@ -28,3 +28,8 @@ goblin = "0.2.0"
 
 [badges]
 maintenance = { status = "experimental" }
+
+[[package.metadata.release.pre-release-replacements]]
+file = "README.md"
+search = "linapi = .*"
+replace = "{{crate_name}} = \"{{version}}\""
