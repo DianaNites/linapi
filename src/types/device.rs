@@ -132,53 +132,33 @@ pub trait Device {
             .map(|s| s.file_stem().unwrap().to_str().unwrap().into())
             .unwrap()
     }
+
+    /// Device Power Management
+    ///
+    /// See the [kernel docs][1] for details.
+    ///
+    /// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
+    fn power(&self) -> PowerInfo {
+        PowerInfo {
+            device_path: self.device_path(),
+        }
+    }
 }
 
-/// Device Power Management Interface
-///
-/// All Devices should have this
-///
-/// See the [kernel docs][1] for details.
-///
-/// # Note
-///
-/// This interface is 'testing' and may change between kernel versions, if a
-/// critical flaw is found.
-///
-/// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
-pub trait DevicePower {
+pub struct PowerInfo<'a> {
+    device_path: &'a Path,
+}
+
+impl PowerInfo<'_> {
     /// Whether this Device is allowed to wake the system up from sleep states.
     ///
     /// If the Device does not support this, [`None`] is returned.
-    // TODO: One optional `Wakeup` struct with all info.
-    fn can_wakeup(&self) -> Option<bool>;
-
-    /// Current Device control setting
-    fn control(&self) -> DevicePowerControl;
-
-    /// How long the device will wait after becoming idle before being
-    /// suspended.
     ///
-    /// [`None`] is returned if this is unsupported.
-    fn autosuspend_delay(&self) -> Option<Duration>;
-
-    /// Current Power Management Status of the Device.
-    fn status(&self) -> DevicePowerStatus;
-
-    /// Whether the device is suspended/resumed asynchronously. during
-    /// system-wide power transitions.
+    /// # Note
     ///
-    /// This defaults to `false` for most devices.
-    fn r#async(&self) -> bool;
-}
-
-/// All devices have power information
-impl<T> DevicePower for T
-where
-    T: Device,
-{
-    fn can_wakeup(&self) -> Option<bool> {
-        fs::read_to_string(self.device_path().join("power/wakeup"))
+    /// This is a temporary kludge API
+    pub fn can_wakeup(&self) -> Option<bool> {
+        fs::read_to_string(self.device_path.join("power/wakeup"))
             .map(|s| match s.trim() {
                 "enabled" => true,
                 "disabled" => false,
@@ -186,8 +166,21 @@ where
             })
             .ok()
     }
-    fn control(&self) -> DevicePowerControl {
-        fs::read_to_string(self.device_path().join("power/control"))
+
+    /// Wakeup information.
+    ///
+    /// If this device is capable of waking the system up from sleep states,
+    /// [`Some`] is returned.
+    ///
+    /// If the Device does not support this, [`None`] is returned.
+    // TODO: Implement this
+    fn _wakeup(&self) -> Option<()> {
+        todo!()
+    }
+
+    /// Current Device control setting
+    pub fn control(&self) -> DevicePowerControl {
+        fs::read_to_string(self.device_path.join("power/control"))
             .map(|s| match s.trim() {
                 "auto" => DevicePowerControl::Auto,
                 "on" => DevicePowerControl::On,
@@ -195,13 +188,20 @@ where
             })
             .unwrap()
     }
-    fn autosuspend_delay(&self) -> Option<Duration> {
-        fs::read_to_string(self.device_path().join("power/autosuspend_delay_ms"))
+
+    /// How long the device will wait after becoming idle before being
+    /// suspended.
+    ///
+    /// [`None`] is returned if this is unsupported.
+    pub fn autosuspend_delay(&self) -> Option<Duration> {
+        fs::read_to_string(self.device_path.join("power/autosuspend_delay_ms"))
             .map(|s| Duration::from_millis(s.trim().parse().unwrap()))
             .ok()
     }
-    fn status(&self) -> DevicePowerStatus {
-        fs::read_to_string(self.device_path().join("power/runtime_status"))
+
+    /// Current Power Management Status of the Device.
+    pub fn status(&self) -> DevicePowerStatus {
+        fs::read_to_string(self.device_path.join("power/runtime_status"))
             .map(|s| match s.trim() {
                 "suspended" => DevicePowerStatus::Suspended,
                 "suspending" => DevicePowerStatus::Suspending,
@@ -213,8 +213,13 @@ where
             })
             .unwrap()
     }
-    fn r#async(&self) -> bool {
-        fs::read_to_string(self.device_path().join("power/async"))
+
+    /// Whether the device is suspended/resumed asynchronously. during
+    /// system-wide power transitions.
+    ///
+    /// This defaults to `false` for most devices.
+    pub fn r#async(&self) -> bool {
+        fs::read_to_string(self.device_path.join("power/async"))
             .map(|s| match s.trim() {
                 "enabled" => true,
                 "disabled" => false,

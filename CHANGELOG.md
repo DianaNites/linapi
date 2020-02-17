@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed `LoadedModule::from_loaded` to `LoadedModule::get_loaded`
   `from_loaded` wasn't a good name because this constructor doesn't
   convert from anything.
+- Replaced the `DevicePower` trait with `Device::power` on the `Device` trait.
 
 ## [0.2.4] - 2020-02-16
 
