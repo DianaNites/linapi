@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- Renamed `LoadedModule::from_loaded` to `LoadedModule::get_loaded`
+  `from_loaded` wasn't a good name because this constructor doesn't
+  convert from anything.
+
 ## [0.2.4] - 2020-02-16
 
 ### Added
