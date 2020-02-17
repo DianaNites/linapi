@@ -40,6 +40,7 @@ mod raw {
 }
 
 //
+pub mod devices;
 pub mod extensions;
 pub mod modules;
 pub mod types;
