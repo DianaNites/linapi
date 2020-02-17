@@ -43,7 +43,6 @@ use crate::{
     },
 };
 use flate2::read::GzDecoder;
-use goblin::elf::{section_header::SHT_PROGBITS, Elf};
 use lzma_rs::xz_decompress;
 use nix::{
     kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
@@ -59,6 +58,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
+use xmas_elf::ElfFile;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
@@ -509,105 +509,89 @@ impl ModuleFile {
         self.decompress(fs::read(&self.path)?)
     }
 
-    /// Get information embedded in the module file.
-    ///
-    /// # Note
-    ///
-    /// This uses the `.modinfo` ELF section, which seems to be entirely
-    /// undocumented.
-    ///
-    /// Kernel modules also may be compressed, and depending on crate features,
-    /// this function may automatically decompress it.
     fn _info(&self, img: &[u8]) -> Result<ModInfo> {
-        let elf = Elf::parse(&img).map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
-        for header in elf.section_headers {
-            if header.sh_type != SHT_PROGBITS {
-                continue;
-            }
-            // Unwraps are probably fine, but goblin api is.. not great.
-            // FIXME: Write own ELF parser? lol. Switch to a different library?
-            let name = elf.shdr_strtab.get(header.sh_name).unwrap().unwrap();
-            if name == ".modinfo" {
-                let mut map = HashMap::new();
-                for kv in BufRead::split(&img[header.file_range()], b'\0') {
-                    let kv = kv?;
-                    let s = String::from_utf8(kv)
-                        .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
-                    let mut s = s.splitn(2, '=');
-                    //
-                    let key = s
-                        .next()
-                        .and_then(|s| Some(s.to_string()))
-                        .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
-                    let value = s
-                        .next()
-                        .and_then(|s| Some(s.to_string()))
-                        .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
-                    let vec = map.entry(key).or_insert(Vec::new());
-                    if !value.is_empty() {
-                        vec.push(value);
-                    }
-                }
-                fn y_n(s: &str) -> bool {
-                    if s == "Y" {
-                        true
-                    } else {
-                        false
-                    }
-                }
-                fn one(map: &mut HashMap<String, Vec<String>>, key: &str) -> String {
-                    map.remove(key).map(|mut v| v.remove(0)).unwrap_or_default()
-                }
-                fn more(map: &mut HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
-                    map.remove(key).unwrap_or_default()
-                }
-                let mut parameters = Vec::new();
-                // FIXME: Are parameters and their types guaranteed to be the same order?
-                // Sort first?
-                for ((name, description), type_) in map
-                    .remove("parm")
-                    .unwrap()
-                    .into_iter()
-                    .map(|s| {
-                        let mut i = s.splitn(2, ':');
-                        let name = i.next().unwrap();
-                        let desc = i.next().unwrap();
-                        (name.to_string(), desc.to_string())
-                    })
-                    .zip(map.remove("parmtype").unwrap().into_iter().map(|s| {
-                        let mut i = s.splitn(2, ':');
-                        i.next().unwrap();
-                        let typ = i.next().unwrap();
-                        typ.to_string()
-                    }))
-                {
-                    parameters.push(ModParam {
-                        name,
-                        description,
-                        type_,
-                    })
-                }
-                return Ok(ModInfo {
-                    alias: more(&mut map, "alias"),
-                    soft_dependencies: more(&mut map, "softdep"),
-                    license: one(&mut map, "license"),
-                    authors: more(&mut map, "author"),
-                    description: one(&mut map, "description"),
-                    version: one(&mut map, "version"),
-                    firmware: more(&mut map, "firmware"),
-                    version_magic: one(&mut map, "vermagic"),
-                    name: one(&mut map, "name"),
-                    in_tree: y_n(&one(&mut map, "intree")),
-                    retpoline: y_n(&one(&mut map, "retpoline")),
-                    staging: y_n(&one(&mut map, "staging")),
-                    dependencies: more(&mut map, "depends"),
-                    source_checksum: one(&mut map, "srcversion"),
-                    parameters,
-                });
+        let elf = ElfFile::new(img).map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
+        let sect = elf
+            .find_section_by_name(".modinfo")
+            .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+        let data = sect.raw_data(&elf);
+        dbg!(data);
+        //
+        let mut map = HashMap::new();
+        for kv in BufRead::split(data, b'\0') {
+            let kv = kv?;
+            let s = String::from_utf8(kv).map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
+            let mut s = s.splitn(2, '=');
+            //
+            let key = s
+                .next()
+                .and_then(|s| Some(s.to_string()))
+                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            let value = s
+                .next()
+                .and_then(|s| Some(s.to_string()))
+                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            let vec = map.entry(key).or_insert(Vec::new());
+            if !value.is_empty() {
+                vec.push(value);
             }
         }
-        //
-        Err(ModuleError::InvalidModule(MODINFO.into()))
+        fn y_n(s: &str) -> bool {
+            if s == "Y" {
+                true
+            } else {
+                false
+            }
+        }
+        fn one(map: &mut HashMap<String, Vec<String>>, key: &str) -> String {
+            map.remove(key).map(|mut v| v.remove(0)).unwrap_or_default()
+        }
+        fn more(map: &mut HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
+            map.remove(key).unwrap_or_default()
+        }
+        let mut parameters = Vec::new();
+        // FIXME: Are parameters and their types guaranteed to be the same order?
+        // Sort first?
+        for ((name, description), type_) in map
+            .remove("parm")
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                let mut i = s.splitn(2, ':');
+                let name = i.next().unwrap();
+                let desc = i.next().unwrap();
+                (name.to_string(), desc.to_string())
+            })
+            .zip(map.remove("parmtype").unwrap().into_iter().map(|s| {
+                let mut i = s.splitn(2, ':');
+                i.next().unwrap();
+                let typ = i.next().unwrap();
+                typ.to_string()
+            }))
+        {
+            parameters.push(ModParam {
+                name,
+                description,
+                type_,
+            })
+        }
+        Ok(ModInfo {
+            alias: more(&mut map, "alias"),
+            soft_dependencies: more(&mut map, "softdep"),
+            license: one(&mut map, "license"),
+            authors: more(&mut map, "author"),
+            description: one(&mut map, "description"),
+            version: one(&mut map, "version"),
+            firmware: more(&mut map, "firmware"),
+            version_magic: one(&mut map, "vermagic"),
+            name: one(&mut map, "name"),
+            in_tree: y_n(&one(&mut map, "intree")),
+            retpoline: y_n(&one(&mut map, "retpoline")),
+            staging: y_n(&one(&mut map, "staging")),
+            dependencies: more(&mut map, "depends"),
+            source_checksum: one(&mut map, "srcversion"),
+            parameters,
+        })
     }
 
     /// Module Signature info, if any.
