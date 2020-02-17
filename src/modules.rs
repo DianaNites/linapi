@@ -163,7 +163,7 @@ impl LoadedModule {
     ///
     /// Modules can be unloaded, and if that happens methods on [`LoadedModule`]
     /// will panic
-    pub fn from_loaded() -> Vec<Self> {
+    pub fn get_loaded() -> Vec<Self> {
         let dir = Path::new(SYSFS_PATH).join("module");
         let mut mods = Vec::new();
         //
