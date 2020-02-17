@@ -30,7 +30,7 @@ impl Device {
             }
         } else {
             let paths = &[
-                sysfs.join("class").join("subsystem"),
+                sysfs.join("class").join(subsystem),
                 // `/sys/bus/<subsystem>` is laid out differently from
                 // `/sys/class/<subsystem>`
                 sysfs.join("bus").join(subsystem).join("devices"),
