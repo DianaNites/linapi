@@ -76,7 +76,7 @@ impl BlockDevice {
     pub fn get_connected() -> Vec<Self> {
         Device::get_connected("block")
             .into_iter()
-            .filter(|d| d.device_path().join("partition").exists())
+            .filter(|d| !d.device_path().join("partition").exists())
             .map(BlockDevice::from_device)
             .collect()
     }
