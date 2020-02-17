@@ -1,5 +1,5 @@
 //! Interfaces common to all devices
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 /// [`DevicePower::control`] Controls
 pub enum DevicePowerControl {
@@ -106,7 +106,7 @@ pub trait Device {
     ///
     /// This is the absolute canonical filesystem path of the Device, so it
     /// includes the leading `/sys`
-    fn device_path(&self) -> PathBuf;
+    fn device_path(&self) -> &Path;
 
     /// Kernel name of the Device, ie `sda`. Identical to the last element of
     /// [`Device::device_path`]
