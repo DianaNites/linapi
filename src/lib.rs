@@ -36,7 +36,6 @@
 
 mod raw {
     #![allow(dead_code)]
-    pub mod block;
     pub mod ioctl;
 }
 
