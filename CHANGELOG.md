@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Bug in `BlockDevice::get_connected` where partitions would incorrectly
+  be included.
+
 ## [0.3.1] - 2020-02-17
 
 ### Fixed

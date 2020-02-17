@@ -69,9 +69,14 @@ impl BlockDevice {
     }
 
     /// Get connected block devices
+    ///
+    /// # Note
+    ///
+    /// This skips partitions, which may appear in the block subsystems.
     pub fn get_connected() -> Vec<Self> {
         Device::get_connected("block")
             .into_iter()
+            .filter(|d| d.device_path().join("partition").exists())
             .map(BlockDevice::from_device)
             .collect()
     }
