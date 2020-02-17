@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.3.4] - 2020-02-17
+
 ### Fixed
 
 - Various `BlockDevice` methods, which forgot to trim newlines
@@ -91,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release. No notable features
 
 <!-- next-url -->
-[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/DianaNites/linapi/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/DianaNites/linapi/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/DianaNites/linapi/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/DianaNites/linapi/compare/v0.3.0...v0.3.1
