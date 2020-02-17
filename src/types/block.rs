@@ -64,7 +64,7 @@ pub trait BlockDevice: Device {
     /// This interface uses the `dev` file, which is undocumented.
     fn major(&self) -> u64 {
         fs::read_to_string(self.device_path().join("dev"))
-            .map(|s| s.split(':').next().unwrap().parse().unwrap())
+            .map(|s| s.trim().split(':').next().unwrap().parse().unwrap())
             .unwrap()
     }
 
@@ -75,7 +75,7 @@ pub trait BlockDevice: Device {
     /// This interface uses the `dev` file, which is undocumented.
     fn minor(&self) -> u64 {
         fs::read_to_string(self.device_path().join("dev"))
-            .map(|s| s.rsplit(':').next().unwrap().parse().unwrap())
+            .map(|s| s.trim().rsplit(':').next().unwrap().parse().unwrap())
             .unwrap()
     }
 
@@ -92,7 +92,7 @@ pub trait BlockDevice: Device {
         unsafe {
             BlockCap::from_bits_unchecked(
                 fs::read_to_string(self.device_path().join("capability"))
-                    .map(|s| s.parse().unwrap())
+                    .map(|s| s.trim().parse().unwrap())
                     .unwrap(),
             )
         }
@@ -109,7 +109,7 @@ pub trait BlockDevice: Device {
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
     fn size(&self) -> u64 {
         fs::read_to_string(self.device_path().join("size"))
-            .map(|s| s.parse::<u64>().unwrap() * 512)
+            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
 
@@ -117,7 +117,7 @@ pub trait BlockDevice: Device {
     /// offset from the disk's natural alignment.
     fn alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.parse().unwrap())
+            .map(|s| s.trim().parse().unwrap())
             .unwrap()
     }
 
@@ -125,7 +125,7 @@ pub trait BlockDevice: Device {
     /// natural alignment.
     fn discard_alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.parse().unwrap())
+            .map(|s| s.trim().parse().unwrap())
             .unwrap()
     }
 
@@ -143,7 +143,7 @@ pub trait BlockDevicePartition: Device {
     /// offset from the disk's natural alignment.
     fn alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("alignment_offset"))
-            .map(|s| s.parse().unwrap())
+            .map(|s| s.trim().parse().unwrap())
             .unwrap()
     }
 
@@ -151,7 +151,7 @@ pub trait BlockDevicePartition: Device {
     /// disk's natural alignment.
     fn discard_alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.parse().unwrap())
+            .map(|s| s.trim().parse().unwrap())
             .unwrap()
     }
 
@@ -166,7 +166,7 @@ pub trait BlockDevicePartition: Device {
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
     fn size(&self) -> u64 {
         fs::read_to_string(self.device_path().join("size"))
-            .map(|s| s.parse::<u64>().unwrap() * 512)
+            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
 
@@ -181,7 +181,7 @@ pub trait BlockDevicePartition: Device {
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
     fn start(&self) -> u64 {
         fs::read_to_string(self.device_path().join("start"))
-            .map(|s| s.parse::<u64>().unwrap() * 512)
+            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
 }

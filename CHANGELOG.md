@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Various `BlockDevice` methods, which forgot to trim newlines
+
 ## [0.3.3] - 2020-02-17
 
 ### Fixed
