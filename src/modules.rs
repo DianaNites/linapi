@@ -537,8 +537,9 @@ impl ModuleFile {
     ///
     /// This is a temporary API.
     pub fn has_signature(&self) -> bool {
-        let f = fs::read(&self.path).unwrap();
-        f.ends_with(SIGNATURE_MAGIC)
+        let img = fs::read(&self.path).unwrap();
+        let img = self.decompress(img);
+        img.ends_with(SIGNATURE_MAGIC)
     }
 
     /// Module Signature info, if any.
