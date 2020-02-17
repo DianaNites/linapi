@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
-## [0.3.2] - 2020-02-17
+### Fixed
+
+- `get_connected` for real this time...
+
+## [0.3.2] - 2020-02-17 [YANKED]
 
 ### Fixed
 
