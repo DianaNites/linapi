@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- `ModuleFile::has_signature` for compressed modules
+
+### Added
+
+- Error handling
+
+### Changed
+
+- `ModuleFile` methods now return errors instead of panicking.
+- `ModuleFile::info` returns `&ModInfo` instead of `ModInfo`
+
 ## [0.3.4] - 2020-02-17
 
 ### Fixed

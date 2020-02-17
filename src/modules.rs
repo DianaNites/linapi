@@ -32,6 +32,7 @@
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-module
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-module
 use crate::{
+    error::{text::*, ModuleError},
     extensions::FileExt,
     types::{
         util::{read_uevent, write_uevent},
@@ -60,6 +61,8 @@ use std::{
 use walkdir::WalkDir;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
+
+pub type Result<T> = std::result::Result<T, ModuleError>;
 
 /// Kernel modules can be "tainted", which serve as a marker for debugging
 /// purposes.
@@ -322,56 +325,97 @@ impl UEvent for LoadedModule {
 }
 
 /// A Linux Kernel Module file on disk.
+///
+/// On construction information about the module is read and saved.
+///
+/// But the file may change on disk or even be removed, so you can use
+/// `ModuleFile::refresh` to update the information or show an error if it's
+/// been removed.
 #[derive(Debug)]
 pub struct ModuleFile {
     name: String,
     path: PathBuf,
+    //
+    info: Option<ModInfo>,
+    signature: bool,
 }
 
+// Public methods
 impl ModuleFile {
+    /// Refresh information on the module
+    ///
+    /// # Errors
+    ///
+    /// - If the file no longer exists
+    /// - If the module or any of it's information is invalid
+    pub fn refresh(&mut self) -> Result<()> {
+        let img = self.read()?;
+        self.info = Some(self._info(&img)?);
+        self.signature = img.ends_with(SIGNATURE_MAGIC);
+        //
+        Ok(())
+    }
+
     /// Search `/lib/modules/(uname -r)` for the module `name`.
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If the module couldn't be found
-    pub fn from_name(name: &str) -> Self {
+    /// - See [`ModuleFile::refresh`]
+    pub fn from_name(name: &str) -> Result<Self> {
         let path = Path::new(MODULE_PATH)
             .join(uname().release())
             .join("kernel");
         for entry in WalkDir::new(path) {
-            let entry = entry.unwrap();
+            let entry = entry.map_err(|e| ModuleError::Io(e.into()))?;
             if !entry.file_type().is_file() {
                 continue;
             }
-            // Compressed modules can have two? file extensions
-            let m = if entry.path().extension().unwrap() == "ko" {
-                entry.path().file_stem().unwrap()
-            } else {
-                Path::new(entry.path().file_stem().unwrap())
-                    .file_stem()
-                    .unwrap()
-            };
-            if m == name {
-                return Self {
+            // Get the module filename without any extensions.
+            // Modules are `.ko` but can be compressed, `.ko.xz`.
+            let m_name = entry
+                .path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .and_then(|s| s.splitn(2, ".").next())
+                .ok_or(ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
+            if m_name == name {
+                let mut s = Self {
                     name: name.into(),
                     path: entry.into_path(),
+                    info: None,
+                    signature: false,
                 };
+                s.refresh()?;
+                return Ok(s);
             }
         }
-        panic!("Couldn't find module {}", name);
+        return Err(ModuleError::LoadError(name.into(), NOT_FOUND.into()));
     }
 
     /// Use the file at `path` as a module.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// - If the module couldn't be found
-    pub fn from_path(path: &Path) -> Self {
-        assert!(path.exists());
-        Self {
-            name: path.file_stem().unwrap().to_str().unwrap().into(),
+    /// - if `path` does not exist
+    /// - if `path` is not a valid module.
+    pub fn from_path(path: &Path) -> Result<Self> {
+        let mut s = Self {
+            name: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or(ModuleError::LoadError(
+                    path.display().to_string(),
+                    NOT_FOUND.into(),
+                ))?
+                .into(),
             path: path.into(),
-        }
+            info: None,
+            signature: false,
+        };
+        s.refresh()?;
+        //
+        Ok(s)
     }
 
     /// Load this kernel module, and return the [`LoadedModule`] describing it.
@@ -381,42 +425,42 @@ impl ModuleFile {
     /// - `param`eters for the kernel module. See module documentation for
     ///   details, and `init_module(2)` for details on formatting.
     ///
+    /// # Errors
+    ///
+    /// - If the file no longer exists
+    /// - If the file can't be decompressed
+    /// - If the module fails to load
+    ///
     /// # Panics
     ///
-    /// - On failure
+    /// - if `param` has any `0` bytes.
     ///
     /// # Note
     ///
     /// Kernel modules may be compressed, and depending on crate features this
     /// function may automatically decompress it.
-    pub fn load(&self, param: &str) -> LoadedModule {
-        let img = fs::read(&self.path).unwrap();
-        let img = self.decompress(img);
-        init_module(&img, &CString::new(param).unwrap()).unwrap();
-        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
+    pub fn load(&self, param: &str) -> Result<LoadedModule> {
+        let img = self.read()?;
+        init_module(&img, &CString::new(param).unwrap())
+            .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
+        //
+        Ok(LoadedModule::from_dir(
+            &Path::new(SYSFS_PATH).join("module").join(&self.name),
+        ))
     }
 
     /// Force load this kernel module, and return the [`LoadedModule`]
     /// describing it.
     ///
-    /// # Arguments
-    ///
-    /// - `param`eters for the kernel module. See module documentation for
-    ///   details, and `init_module(2)` for details on formatting.
+    /// See [`ModuleFile::load`] for more details.
     ///
     /// # Safety
     ///
     /// Force loading a kernel module is dangerous, it skips important safety
     /// checks that help ensure module compatibility with your kernel.
-    ///
-    /// # Note
-    ///
-    /// Kernel modules may be compressed, and depending on crate features this
-    /// function may automatically decompress it.
-    pub unsafe fn force_load(&self, param: &str) -> LoadedModule {
-        let img = fs::read(&self.path).unwrap();
+    pub unsafe fn force_load(&self, param: &str) -> Result<LoadedModule> {
         let mut file = fs::File::create_memory("decompressed module");
-        file.write_all(&self.decompress(img)).unwrap();
+        file.write_all(&self.read()?)?;
         //
         finit_module(
             &file,
@@ -424,8 +468,11 @@ impl ModuleFile {
             ModuleInitFlags::MODULE_INIT_IGNORE_MODVERSIONS
                 | ModuleInitFlags::MODULE_INIT_IGNORE_VERMAGIC,
         )
-        .unwrap();
-        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
+        .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
+        //
+        Ok(LoadedModule::from_dir(
+            &Path::new(SYSFS_PATH).join("module").join(&self.name),
+        ))
     }
 
     pub fn path(&self) -> &Path {
@@ -437,6 +484,32 @@ impl ModuleFile {
     }
 
     /// Get information embedded in the module file.
+    pub fn info(&self) -> &ModInfo {
+        // This unwrap should be okay, as `refresh` should be called by all constructors
+        // and ensure this is `Some`
+        self.info.as_ref().unwrap()
+    }
+
+    /// Whether the module has a signature.
+    ///
+    /// This does not check if it's valid.
+    ///
+    /// # Note
+    ///
+    /// This is a temporary API, as `rust-openssl` does not expose the APIs
+    /// required for properly reading module signatures.
+    pub fn has_signature(&self) -> bool {
+        self.signature
+    }
+}
+
+// Private methods
+impl ModuleFile {
+    fn read(&self) -> Result<Vec<u8>> {
+        self.decompress(fs::read(&self.path)?)
+    }
+
+    /// Get information embedded in the module file.
     ///
     /// # Note
     ///
@@ -445,24 +518,31 @@ impl ModuleFile {
     ///
     /// Kernel modules also may be compressed, and depending on crate features,
     /// this function may automatically decompress it.
-    pub fn info(&self) -> ModInfo {
-        let f = fs::read(&self.path).unwrap();
-        let f = self.decompress(f);
-        //
-        let elf = Elf::parse(&f).unwrap();
+    fn _info(&self, img: &[u8]) -> Result<ModInfo> {
+        let elf = Elf::parse(&img).map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
         for header in elf.section_headers {
             if header.sh_type != SHT_PROGBITS {
                 continue;
             }
+            // Unwraps are probably fine, but goblin api is.. not great.
+            // FIXME: Write own ELF parser? lol. Switch to a different library?
             let name = elf.shdr_strtab.get(header.sh_name).unwrap().unwrap();
             if name == ".modinfo" {
                 let mut map = HashMap::new();
-                for kv in BufRead::split(&f[header.file_range()], b'\0') {
-                    let kv: Vec<u8> = kv.unwrap();
-                    let s = String::from_utf8(kv).unwrap();
+                for kv in BufRead::split(&img[header.file_range()], b'\0') {
+                    let kv = kv?;
+                    let s = String::from_utf8(kv)
+                        .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
                     let mut s = s.splitn(2, '=');
-                    let key = s.next().unwrap().to_string();
-                    let value = s.next().unwrap().to_string();
+                    //
+                    let key = s
+                        .next()
+                        .and_then(|s| Some(s.to_string()))
+                        .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+                    let value = s
+                        .next()
+                        .and_then(|s| Some(s.to_string()))
+                        .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
                     let vec = map.entry(key).or_insert(Vec::new());
                     if !value.is_empty() {
                         vec.push(value);
@@ -507,7 +587,7 @@ impl ModuleFile {
                         type_,
                     })
                 }
-                return ModInfo {
+                return Ok(ModInfo {
                     alias: more(&mut map, "alias"),
                     soft_dependencies: more(&mut map, "softdep"),
                     license: one(&mut map, "license"),
@@ -523,23 +603,11 @@ impl ModuleFile {
                     dependencies: more(&mut map, "depends"),
                     source_checksum: one(&mut map, "srcversion"),
                     parameters,
-                };
+                });
             }
         }
-        panic!("Missing .modinfo")
-    }
-
-    /// Whether the module has a signature.
-    ///
-    /// This does not check if it's valid.
-    ///
-    /// # Note
-    ///
-    /// This is a temporary API.
-    pub fn has_signature(&self) -> bool {
-        let img = fs::read(&self.path).unwrap();
-        let img = self.decompress(img);
-        img.ends_with(SIGNATURE_MAGIC)
+        //
+        Err(ModuleError::InvalidModule(MODINFO.into()))
     }
 
     /// Module Signature info, if any.
@@ -565,26 +633,34 @@ impl ModuleFile {
     }
 
     /// Decompresses a kernel module
-    fn decompress(&self, data: Vec<u8>) -> Vec<u8> {
+    ///
+    /// Returns `data` unchanged if not compressed.
+    fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
         let mut v = Vec::new();
-        if let Some(ext) = self.path.extension() {
-            let ext = ext.to_str().unwrap();
-            match ext {
-                "xz" => {
-                    let mut data = std::io::BufReader::new(data.as_slice());
-                    xz_decompress(&mut data, &mut v).unwrap();
-                    v
-                }
-                "gz" => {
-                    let mut data = GzDecoder::new(data.as_slice());
-                    data.read_to_end(&mut v).unwrap();
-                    v
-                }
-                "ko" => data,
-                _ => panic!("Unsupported/Unknown compression?"),
-            }
+        let ext = self
+            .path
+            .extension()
+            .ok_or(ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
+        if ext == "xz" {
+            let mut data = std::io::BufReader::new(data.as_slice());
+            // FIXME: Write own xz library with an actual error type?
+            xz_decompress(&mut data, &mut v).map_err(|e| {
+                ModuleError::InvalidModule(match e {
+                    lzma_rs::error::Error::LZMAError(s) => s,
+                    lzma_rs::error::Error::XZError(s) => s,
+                    lzma_rs::error::Error::IOError(s) => s.to_string(),
+                })
+            })?;
+            Ok(v)
+        } else if ext == "gz" {
+            let mut data = GzDecoder::new(data.as_slice());
+            data.read_to_end(&mut v)
+                .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
+            Ok(v)
+        } else if ext == "ko" {
+            return Ok(data);
         } else {
-            panic!("Unsupported/Unknown compression?")
+            return Err(ModuleError::InvalidModule(COMPRESSION.into()));
         }
     }
 }
