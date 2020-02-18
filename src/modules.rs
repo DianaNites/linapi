@@ -227,14 +227,24 @@ impl LoadedModule {
     /// Module parameters.
     ///
     /// The kernel exposes these as files in a directory, and their contents are
-    /// entirely module specific, hence `Vec<(String, Vec<u8>)>`, which can be
-    /// [`std::io::Read`].
+    /// entirely module specific, hence `HashMap<String, Vec<u8>>`, which can
+    /// be [`std::io::Read`].
+    ///
+    /// The key will be the parameter name and the value is it's data
     ///
     /// # Stability
     ///
     /// The stability of parameters depends entirely on the specific module.
     pub fn parameters(&self) -> HashMap<String, Vec<u8>> {
-        todo!()
+        let mut map = HashMap::new();
+        for entry in fs::read_dir(self.path.join("parameters")).unwrap() {
+            let entry: DirEntry = entry.unwrap();
+            map.insert(
+                entry.file_name().into_string().unwrap(),
+                fs::read(entry.path()).unwrap(),
+            );
+        }
+        map
     }
 
     /// Module reference count.
