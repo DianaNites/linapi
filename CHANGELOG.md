@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error handling.
 - `ModuleFile::from_name_with_uname`, to lookup by `uname` in `/lib/modules`
 - `LoadedModule::module_file`, to get a ModuleFile from a LoadedModule.
+- Cargo Features for compression
 
 ### Changed
 
