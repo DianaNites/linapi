@@ -42,7 +42,9 @@ use crate::{
         SYSFS_PATH,
     },
 };
+#[cfg(feature = "gz")]
 use flate2::read::GzDecoder;
+#[cfg(feature = "xz")]
 use lzma_rs::xz_decompress;
 use nix::{
     kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
@@ -701,33 +703,50 @@ impl ModuleFile {
     /// Decompresses a kernel module
     ///
     /// Returns `data` unchanged if not compressed.
+    #[cfg(any(feature = "xz", feature = "gz"))]
     fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
         let mut v = Vec::new();
         let ext = self
             .path
             .extension()
+            .and_then(|e| e.to_str())
             .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
-        if ext == "xz" {
-            let mut data = std::io::BufReader::new(data.as_slice());
-            // FIXME: Write own xz library with an actual error type?
-            xz_decompress(&mut data, &mut v).map_err(|e| {
-                ModuleError::InvalidModule(match e {
-                    lzma_rs::error::Error::LZMAError(s) => s,
-                    lzma_rs::error::Error::XZError(s) => s,
-                    lzma_rs::error::Error::IOError(s) => s.to_string(),
-                })
-            })?;
-            Ok(v)
-        } else if ext == "gz" {
-            let mut data = GzDecoder::new(data.as_slice());
-            data.read_to_end(&mut v)
-                .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
-            Ok(v)
-        } else if ext == "ko" {
-            Ok(data)
-        } else {
-            Err(ModuleError::InvalidModule(COMPRESSION.into()))
+        match ext {
+            #[cfg(feature = "xz")]
+            "xz" => {
+                let mut data = std::io::BufReader::new(data.as_slice());
+                // FIXME: Write own xz library with an actual error type?
+                xz_decompress(&mut data, &mut v).map_err(|e| {
+                    ModuleError::InvalidModule(match e {
+                        lzma_rs::error::Error::LZMAError(s) => s,
+                        lzma_rs::error::Error::XZError(s) => s,
+                        lzma_rs::error::Error::IOError(s) => s.to_string(),
+                    })
+                })?;
+                Ok(v)
+            }
+            #[cfg(feature = "gz")]
+            "gz" => {
+                let mut data = GzDecoder::new(data.as_slice());
+                data.read_to_end(&mut v)
+                    .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
+                Ok(v)
+            }
+            "ko" => Ok(data),
+            _ => Err(ModuleError::InvalidModule(COMPRESSION.into())),
         }
+    }
+
+    #[cfg(not(any(feature = "xz", feature = "gz")))]
+    fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+        let ext = self
+            .path
+            .extension()
+            .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
+        if ext != "ko" {
+            return Err(ModuleError::InvalidModule(COMPRESSION.into()));
+        }
+        Ok(data)
     }
 }
 
