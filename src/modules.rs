@@ -584,10 +584,9 @@ impl ModuleFile {
             //
             // Parameters aren't required to have descriptions.
             x.get_mut(&name)
-                .map(|v| dbg!(v.1 = desc))
+                .map(|v| v.1 = desc)
                 .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
         }
-        dbg!(&x);
         let mut parameters = Vec::new();
         for (name, (type_, description)) in x {
             parameters.push(ModParam {
