@@ -25,9 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `LoadedModule` methods now return errors instead of panicking.
 - `ModuleFile` methods now return errors instead of panicking.
 - `ModuleFile::info` returns `&ModInfo` instead of `ModInfo`.
 - `ModParam::description` type changed to `Option<String>`.
+- `Status` is no longer `Copy`.
+- `LoadedModule::parameters` returns `&HashMap` instead of `HashMap`
+- `LoadedModule::holders` returns `&Vec` instead of `Vec`
+- `LoadedModule::status` returns `&Status` instead of `Status`
 
 ### Removed
 
