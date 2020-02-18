@@ -548,39 +548,55 @@ impl ModuleFile {
         fn more(map: &mut HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
             map.remove(key).unwrap_or_default()
         }
-        let mut parameters = Vec::new();
-        // FIXME: Are parameters and their types guaranteed to be the same order?
-        // Sort first?
-        for ((name, description), type_) in map
-            .remove("parm")
+        //
+        let mut x = HashMap::new();
+        for (name, typ) in map
+            .remove("parmtype")
             .unwrap_or_default()
             .into_iter()
             .map(|s| {
-                let mut i = s.splitn(2, ':');
-                // These unwraps *should* be okay, if not it means .modinfo is incorrect
-                let name = i.next().unwrap();
-                let desc = i.next().unwrap();
-                (name.to_string(), desc.to_string())
+                let mut i = s.splitn(2, ':').map(|s| s.trim().to_owned());
+                (i.next(), i.next())
             })
-            .zip(
-                map.remove("parmtype")
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|s| {
-                        let mut i = s.splitn(2, ':');
-                        // These unwraps *should* be okay, if not it means .modinfo is incorrect
-                        i.next().unwrap();
-                        let typ = i.next().unwrap();
-                        typ.to_string()
-                    }),
-            )
         {
+            let name: Option<String> = name;
+            let typ: Option<String> = typ;
+            // Types are reasonably guaranteed to exist because
+            // `linux/moduleparam.h` adds them for all the `module_param`
+            // macros, which define parameters.
+            let name = name.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            let typ = typ.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            // Parameters should not have multiple types.
+            if x.insert(name, (typ, None)).is_some() {
+                return Err(ModuleError::InvalidModule(MODINFO.into()));
+            };
+        }
+        for (name, desc) in map.remove("parm").unwrap_or_default().into_iter().map(|s| {
+            let mut i = s.splitn(2, ':').map(|s| s.trim().to_owned());
+            (i.next(), i.next())
+        }) {
+            let name: Option<String> = name;
+            let desc: Option<String> = desc;
+            //
+            let name = name.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            // If we've seen the parameter, which we should have it's probably a
+            // module bug otherwise, add it's description.
+            //
+            // Parameters aren't required to have descriptions.
+            x.get_mut(&name)
+                .map(|v| dbg!(v.1 = desc))
+                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+        }
+        dbg!(&x);
+        let mut parameters = Vec::new();
+        for (name, (type_, description)) in x {
             parameters.push(ModParam {
                 name,
-                description,
                 type_,
+                description,
             })
         }
+        //
         Ok(ModInfo {
             alias: more(&mut map, "alias"),
             soft_dependencies: more(&mut map, "softdep"),
@@ -689,9 +705,16 @@ struct ModSig {
 
 #[derive(Debug)]
 pub struct ModParam {
+    /// Parameter name
     pub name: String,
-    pub description: String,
+
+    /// Parameter name
+    ///
+    /// See `module_param` in `linux/moduleparam.h` for details
+    // TODO: Replace with enum for standard types
     pub type_: String,
+
+    pub description: Option<String>,
 }
 
 /// Information on a [`ModuleFile`]
