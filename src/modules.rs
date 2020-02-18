@@ -385,9 +385,9 @@ impl ModuleFile {
             // Modules are `.ko` but can be compressed, `.ko.xz`.
             let m_name = entry
                 .path()
-                .extension()
+                .file_stem()
                 .and_then(|s| s.to_str())
-                .and_then(|s| s.splitn(2, ".").next())
+                .and_then(|s| s.splitn(2, '.').next())
                 .ok_or(ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
             if m_name == name {
                 let mut s = Self {
