@@ -292,17 +292,19 @@ impl LoadedModule {
         v
     }
 
-    /// Path to the module file.
+    /// Get a [`ModuleFile`] from a [`LoadedModule`]
+    ///
+    /// This can be useful to get information, such as parameter types, about a
+    /// module.
     ///
     /// # Note
     ///
     /// There is no guarantee the returned path is the same module. The file may
-    /// have changed on disk.
+    /// have changed on disk, or been removed.
     ///
-    /// This is equivalent to `find_module_file(&module.name())`
-    pub fn file_path(&self) -> PathBuf {
-        // find_module_file(&self.name())
-        todo!()
+    /// This is equivalent to `ModuleFile::from_name(&self.name)`
+    pub fn module_file(&self) -> Result<ModuleFile> {
+        ModuleFile::from_name(&self.name)
     }
 
     /// Module status.
