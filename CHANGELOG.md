@@ -15,10 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModuleFile::info` for modules without parameters. Previously it would panic.
 - `ModuleFile::info` for modules without parameter descriptions. Previously it would panic.
 - Actually implement `LoadedModule::parameters`. Oops.
+- `ModuleFile::from_name_with_uname`/`ModuleFile::from_name` actually search `/lib/modules/(uname -r)`.
 
 ### Added
 
 - Error handling.
+- `ModuleFile::from_name_with_uname`, to lookup by `uname` in `/lib/modules`
 
 ### Changed
 
