@@ -21,12 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Error handling.
 - `ModuleFile::from_name_with_uname`, to lookup by `uname` in `/lib/modules`
+- `LoadedModule::module_file`, to get a ModuleFile from a LoadedModule.
 
 ### Changed
 
 - `ModuleFile` methods now return errors instead of panicking.
 - `ModuleFile::info` returns `&ModInfo` instead of `ModInfo`.
 - `ModParam::description` type changed to `Option<String>`.
+
+### Removed
+
+- `LoadedModule::file_path`
 
 ## [0.3.4] - 2020-02-17
 
