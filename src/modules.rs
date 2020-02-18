@@ -373,9 +373,14 @@ impl ModuleFile {
     /// - If the module couldn't be found
     /// - See [`ModuleFile::refresh`]
     pub fn from_name(name: &str) -> Result<Self> {
-        let path = Path::new(MODULE_PATH)
-            .join(uname().release())
-            .join("kernel");
+        Self::from_name_with_uname(name, uname().release())
+    }
+
+    /// Search `lib/modules/<uname>` for the module `name`.
+    ///
+    /// See [`ModuleFile::from_name`] for more details.
+    pub fn from_name_with_uname(name: &str, uname: &str) -> Result<Self> {
+        let path = Path::new(MODULE_PATH).join(uname);
         for entry in WalkDir::new(path) {
             let entry = entry.map_err(|e| ModuleError::Io(e.into()))?;
             if !entry.file_type().is_file() {
