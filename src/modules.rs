@@ -54,7 +54,6 @@ use std::{
     fs,
     fs::DirEntry,
     io::{prelude::*, BufRead},
-    mem::size_of,
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
@@ -513,6 +512,7 @@ impl ModuleFile {
     ///
     /// This is a temporary API, as `rust-openssl` does not expose the APIs
     /// required for properly reading module signatures.
+    // FIXME: rust-openssl does not expose the APIs we need, so this isn't possible.
     pub fn has_signature(&self) -> bool {
         self.signature
     }
@@ -628,28 +628,6 @@ impl ModuleFile {
             source_checksum: one(&mut map, "srcversion"),
             parameters,
         })
-    }
-
-    /// Module Signature info, if any.
-    // FIXME: rust-openssl does not expose the APIs we need, so this isn't possible.
-    fn _signature(&self) -> Option<ModSig> {
-        let f = fs::read(&self.path).unwrap();
-        if f.ends_with(SIGNATURE_MAGIC) {
-            // Length of file, minus the signature structure, minus the magic
-            let len = f.len() - size_of::<RawModSig>() - SIGNATURE_MAGIC.len();
-            //
-            let sig: &[u8] = &f[len..];
-            let mut sig = unsafe { (sig.as_ptr() as *const RawModSig).read_unaligned() };
-            sig.signature_length = u32::from_be(sig.signature_length);
-            dbg!(sig);
-            //
-            let data_start = len - sig.signature_length as usize;
-            let _sig_data: &[u8] = &f[data_start..][..sig.signature_length as usize];
-            //
-            todo!()
-        } else {
-            None
-        }
     }
 
     /// Decompresses a kernel module
