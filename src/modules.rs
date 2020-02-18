@@ -61,7 +61,7 @@ use xmas_elf::ElfFile;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
-pub type Result<T> = std::result::Result<T, ModuleError>;
+pub type Result<T, E = ModuleError> = std::result::Result<T, E>;
 
 /// Kernel modules can be "tainted", which serve as a marker for debugging
 /// purposes.
@@ -102,7 +102,7 @@ pub enum Type {
 }
 
 /// Module Init Status
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Status {
     /// Normal state, fully loaded.
     Live,
@@ -112,6 +112,9 @@ pub enum Status {
 
     /// Going away, running module exit?
     Going,
+
+    /// Unknown
+    Unknown(String),
 }
 
 /// Describes a loaded Linux kernel Module
@@ -125,72 +128,125 @@ pub struct LoadedModule {
 
     /// Path to the module
     path: PathBuf,
+
+    /// Module parameters and their contents
+    parameters: HashMap<String, Vec<u8>>,
+
+    /// Module ref count
+    ref_count: Option<u32>,
+
+    /// Module taint
+    taint: Option<Taint>,
+
+    /// Module status
+    status: Option<Status>,
+
+    /// Module size in bytes
+    size: u64,
+
+    /// Module users
+    holders: Vec<Self>,
 }
 
+// Public
 impl LoadedModule {
-    /// Create from module directory
+    /// Refresh information on the module
     ///
-    /// # Note
+    /// # Errors
     ///
-    /// Built-in modules may appear in `/sys/modules` and they are ill-formed,
-    /// missing required files.
-    ///
-    /// In this case `refcnt` is [`None`], `coresize` is 0, and `taint` is
-    /// [`None`]
-    fn from_dir(path: &Path) -> Self {
-        let module_type = if path.join("coresize").exists() {
-            Type::Dynamic
-        } else {
-            Type::BuiltIn
-        };
-        Self {
-            name: path.file_stem().unwrap().to_str().unwrap().trim().into(),
-            module_type,
-            path: path.into(),
+    /// - If any expected module attribute couldn't be read
+    /// - If any expected module attribute was invalid
+    pub fn refresh(&mut self) -> Result<()> {
+        let mut map = HashMap::new();
+        for entry in fs::read_dir(self.path.join("parameters"))? {
+            let entry: DirEntry = entry?;
+            map.insert(
+                entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?,
+                fs::read(entry.path())?,
+            );
         }
+        self.parameters = map;
+        self.ref_count = fs::read_to_string(self.path.join("refcnt"))
+            .map(|s| s.trim().parse())?
+            .ok();
+        self.taint = match fs::read_to_string(self.path.join("taint"))?.trim() {
+            "P" => Some(Taint::Proprietary),
+            "O" => Some(Taint::OutOfTree),
+            "F" => Some(Taint::Forced),
+            "C" => Some(Taint::Staging),
+            "E" => Some(Taint::Unsigned),
+            _ => None,
+        };
+        self.status = Some(
+            match fs::read_to_string(self.path.join("initstate"))?.trim() {
+                "live" => Status::Live,
+                "coming" => Status::Coming,
+                "going" => Status::Going,
+                s => Status::Unknown(s.into()),
+            },
+        );
+        self.size = fs::read_to_string(self.path.join("coresize"))
+            .map(|s| s.trim().parse())?
+            .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?;
+        let mut v = Vec::new();
+        for re in fs::read_dir(self.path.join("holders"))? {
+            let re: DirEntry = re?;
+            v.push(Self::from_dir(&re.path())?)
+        }
+        self.holders = v;
+        //
+        Ok(())
     }
 
     /// Get an already loaded module by name
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - If no such module exists
-    pub fn from_name(name: &str) -> Self {
+    /// - If the module is invalid in some way
+    pub fn from_name(name: &str) -> Result<Self> {
         Self::from_dir(&Path::new(SYSFS_PATH).join("module").join(name))
     }
 
-    /// Get currently loaded dynamic kernel modules
+    /// Get currently loaded dynamic kernel modules.
     ///
-    /// # Note
+    /// # Errors
     ///
-    /// Modules can be unloaded, and if that happens methods on [`LoadedModule`]
-    /// will panic
-    pub fn get_loaded() -> Vec<Self> {
+    /// - IO
+    /// - If any modules couldn't be read
+    pub fn get_loaded() -> Result<Vec<Self>> {
         let dir = Path::new(SYSFS_PATH).join("module");
         let mut mods = Vec::new();
         //
-        for module in fs::read_dir(dir).unwrap() {
-            let module: DirEntry = module.unwrap();
-            let m = Self::from_dir(&module.path());
+        for module in fs::read_dir(dir)? {
+            let module: DirEntry = module?;
+            let m = Self::from_dir(&module.path())?;
             if let Type::BuiltIn = m.module_type() {
                 continue;
             }
             mods.push(m);
         }
-        mods
+        Ok(mods)
     }
 
     /// Unload the module.
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - On failure
-    pub fn unload(self) {
+    pub fn unload(self) -> Result<()> {
         delete_module(
-            &CString::new(self.name).unwrap(),
+            // This unwrap should be okay, `name` is from the file path which shouldn't have nul
+            // bytes
+            &CString::new(self.name.as_str()).unwrap(),
             DeleteModuleFlags::O_NONBLOCK,
         )
-        .unwrap();
+        .map_err(|e| ModuleError::UnloadError(self.name, e.to_string()))?;
+        //
+        Ok(())
     }
 
     /// Forcefully unload a kernel module.
@@ -202,20 +258,24 @@ impl LoadedModule {
     /// It can cause modules to be unloaded while still in use, or unload
     /// modules not designed to be unloaded.
     ///
-    /// # Panics
+    /// # Errors
     ///
     /// - On failure
-    pub unsafe fn force_unload(self) {
+    pub unsafe fn force_unload(self) -> Result<()> {
         delete_module(
-            &CString::new(self.name).unwrap(),
+            // This unwrap should be okay, `name` is from the file path which shouldn't have nul
+            // bytes
+            &CString::new(self.name.as_str()).unwrap(),
             DeleteModuleFlags::O_NONBLOCK | DeleteModuleFlags::O_TRUNC,
         )
-        .unwrap();
+        .map_err(|e| ModuleError::UnloadError(self.name, e.to_string()))?;
+        //
+        Ok(())
     }
 
     /// Name of the module
     pub fn name(&self) -> &str {
-        self.path.file_stem().unwrap().to_str().unwrap()
+        &self.name
     }
 
     /// Module type, Builtin or Dynamic
@@ -234,16 +294,8 @@ impl LoadedModule {
     /// # Stability
     ///
     /// The stability of parameters depends entirely on the specific module.
-    pub fn parameters(&self) -> HashMap<String, Vec<u8>> {
-        let mut map = HashMap::new();
-        for entry in fs::read_dir(self.path.join("parameters")).unwrap() {
-            let entry: DirEntry = entry.unwrap();
-            map.insert(
-                entry.file_name().into_string().unwrap(),
-                fs::read(entry.path()).unwrap(),
-            );
-        }
-        map
+    pub fn parameters(&self) -> &HashMap<String, Vec<u8>> {
+        &self.parameters
     }
 
     /// Module reference count.
@@ -251,30 +303,19 @@ impl LoadedModule {
     /// If the module is built-in, or if the kernel was not built with
     /// `CONFIG_MODULE_UNLOAD`, this will be [`None`]
     pub fn ref_count(&self) -> Option<u32> {
-        fs::read_to_string(self.path.join("refcnt"))
-            .map(|s| s.trim().parse().unwrap())
-            .ok()
+        self.ref_count
     }
 
     /// Module size in bytes
     pub fn size(&self) -> u64 {
-        fs::read_to_string(self.path.join("coresize"))
-            .map(|s| s.trim().parse().unwrap())
-            .unwrap()
+        self.size
     }
 
     /// Module taint, or [`None`] if untainted.
     ///
     /// See [`Taint`] for details.
     pub fn taint(&self) -> Option<Taint> {
-        match fs::read_to_string(self.path.join("taint")).unwrap().trim() {
-            "P" => Some(Taint::Proprietary),
-            "O" => Some(Taint::OutOfTree),
-            "F" => Some(Taint::Forced),
-            "C" => Some(Taint::Staging),
-            "E" => Some(Taint::Unsigned),
-            _ => None,
-        }
+        self.taint
     }
 
     /// List of other modules that use/reference this one.
@@ -283,13 +324,8 @@ impl LoadedModule {
     ///
     /// This uses the `holders` sysfs folder, which is completely undocumented
     /// by the kernel, beware.
-    pub fn holders(&self) -> Vec<Self> {
-        let mut v = Vec::new();
-        for re in fs::read_dir(self.path.join("holders")).unwrap() {
-            let re: DirEntry = re.unwrap();
-            v.push(Self::from_dir(&re.path()))
-        }
-        v
+    pub fn holders(&self) -> &Vec<Self> {
+        &self.holders
     }
 
     /// Get a [`ModuleFile`] from a [`LoadedModule`]
@@ -313,16 +349,51 @@ impl LoadedModule {
     ///
     /// This uses the undocumented `initstate` file, which is probably
     /// `module_state` from `linux/module.h`.
-    pub fn status(&self) -> Status {
-        match fs::read_to_string(self.path.join("initstate"))
-            .unwrap()
-            .trim()
-        {
-            "live" => Status::Live,
-            "coming" => Status::Coming,
-            "going" => Status::Going,
-            _ => panic!("Unknown module state"),
-        }
+    pub fn status(&self) -> &Status {
+        // Should be fine, refresh sets it to `Some`.
+        self.status.as_ref().unwrap()
+    }
+}
+
+// Private
+impl LoadedModule {
+    /// Create from module directory
+    ///
+    /// # Errors
+    ///
+    /// - If module doesn't exist
+    /// - If module is invalid
+    ///
+    /// # Note
+    ///
+    /// Built-in modules may appear in `/sys/modules` and they are ill-formed,
+    /// missing required files.
+    ///
+    /// In this case `refcnt` is [`None`], `coresize` is 0, and `taint` is
+    /// [`None`]
+    fn from_dir(path: &Path) -> Result<Self> {
+        let module_type = if path.join("coresize").exists() {
+            Type::Dynamic
+        } else {
+            Type::BuiltIn
+        };
+        let mut s = Self {
+            name: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.trim().to_owned())
+                .ok_or_else(|| ModuleError::InvalidModule(NAME.into()))?,
+            module_type,
+            path: path.into(),
+            parameters: HashMap::new(),
+            ref_count: None,
+            taint: None,
+            status: None,
+            size: 0,
+            holders: Vec::new(),
+        };
+        s.refresh()?;
+        Ok(s)
     }
 }
 
@@ -461,7 +532,7 @@ impl ModuleFile {
         //
         Ok(LoadedModule::from_dir(
             &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        ))
+        )?)
     }
 
     /// Force load this kernel module, and return the [`LoadedModule`]
@@ -487,7 +558,7 @@ impl ModuleFile {
         //
         Ok(LoadedModule::from_dir(
             &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        ))
+        )?)
     }
 
     pub fn path(&self) -> &Path {

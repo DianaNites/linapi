@@ -12,6 +12,9 @@ pub enum ModuleError {
     /// Couldn't load module {0}: {1}
     LoadError(String, String),
 
+    /// Couldn't unload module {0}: {1}
+    UnloadError(String, String),
+
     /// Module was invalid: `{0}`
     InvalidModule(String),
 }
@@ -23,6 +26,10 @@ pub(crate) mod text {
     pub const COMPRESSION: &str = "unsupported or invalid compression";
 
     pub const NOT_FOUND: &str = "not found";
+
+    pub const NAME: &str = "invalid module name";
+
+    pub const PARAMETER: &str = "invalid module parameter name";
 
     pub const MODINFO: &str = "invalid .modinfo";
 }
