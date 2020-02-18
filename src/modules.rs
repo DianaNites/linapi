@@ -554,20 +554,27 @@ impl ModuleFile {
         // Sort first?
         for ((name, description), type_) in map
             .remove("parm")
-            .unwrap()
+            .unwrap_or_default()
             .into_iter()
             .map(|s| {
                 let mut i = s.splitn(2, ':');
+                // These unwraps *should* be okay, if not it means .modinfo is incorrect
                 let name = i.next().unwrap();
                 let desc = i.next().unwrap();
                 (name.to_string(), desc.to_string())
             })
-            .zip(map.remove("parmtype").unwrap().into_iter().map(|s| {
-                let mut i = s.splitn(2, ':');
-                i.next().unwrap();
-                let typ = i.next().unwrap();
-                typ.to_string()
-            }))
+            .zip(
+                map.remove("parmtype")
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|s| {
+                        let mut i = s.splitn(2, ':');
+                        // These unwraps *should* be okay, if not it means .modinfo is incorrect
+                        i.next().unwrap();
+                        let typ = i.next().unwrap();
+                        typ.to_string()
+                    }),
+            )
         {
             parameters.push(ModParam {
                 name,

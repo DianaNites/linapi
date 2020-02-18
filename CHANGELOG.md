@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `ModuleFile::has_signature` for compressed modules
+- `ModuleFile::info` for modules without parameters. Previously it would panic.
 
 ### Added
 
