@@ -394,7 +394,7 @@ impl ModuleFile {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .and_then(|s| s.splitn(2, '.').next())
-                .ok_or(ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
+                .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
             if m_name == name {
                 let mut s = Self {
                     name: name.into(),
@@ -406,7 +406,7 @@ impl ModuleFile {
                 return Ok(s);
             }
         }
-        return Err(ModuleError::LoadError(name.into(), NOT_FOUND.into()));
+        Err(ModuleError::LoadError(name.into(), NOT_FOUND.into()))
     }
 
     /// Use the file at `path` as a module.
@@ -420,10 +420,9 @@ impl ModuleFile {
             name: path
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .ok_or(ModuleError::LoadError(
-                    path.display().to_string(),
-                    NOT_FOUND.into(),
-                ))?
+                .ok_or_else(|| {
+                    ModuleError::LoadError(path.display().to_string(), NOT_FOUND.into())
+                })?
                 .into(),
             path: path.into(),
             info: None,
@@ -530,7 +529,7 @@ impl ModuleFile {
         let elf = ElfFile::new(img).map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
         let sect = elf
             .find_section_by_name(".modinfo")
-            .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            .ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
         let data = sect.raw_data(&elf);
         //
         let mut map = HashMap::new();
@@ -541,23 +540,19 @@ impl ModuleFile {
             //
             let key = s
                 .next()
-                .and_then(|s| Some(s.to_string()))
-                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+                .map(|s| s.to_string())
+                .ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
             let value = s
                 .next()
-                .and_then(|s| Some(s.to_string()))
-                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
-            let vec = map.entry(key).or_insert(Vec::new());
+                .map(|s| s.to_string())
+                .ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
+            let vec = map.entry(key).or_insert_with(Vec::new);
             if !value.is_empty() {
                 vec.push(value);
             }
         }
         fn y_n(s: &str) -> bool {
-            if s == "Y" {
-                true
-            } else {
-                false
-            }
+            s == "Y" || s == "y"
         }
         fn one(map: &mut HashMap<String, Vec<String>>, key: &str) -> String {
             map.remove(key).map(|mut v| v.remove(0)).unwrap_or_default()
@@ -581,8 +576,8 @@ impl ModuleFile {
             // Types are reasonably guaranteed to exist because
             // `linux/moduleparam.h` adds them for all the `module_param`
             // macros, which define parameters.
-            let name = name.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
-            let typ = typ.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            let name = name.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
+            let typ = typ.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
             // Parameters should not have multiple types.
             if x.insert(name, (typ, None)).is_some() {
                 return Err(ModuleError::InvalidModule(MODINFO.into()));
@@ -595,14 +590,14 @@ impl ModuleFile {
             let name: Option<String> = name;
             let desc: Option<String> = desc;
             //
-            let name = name.ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+            let name = name.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
             // If we've seen the parameter, which we should have it's probably a
             // module bug otherwise, add it's description.
             //
             // Parameters aren't required to have descriptions.
             x.get_mut(&name)
                 .map(|v| v.1 = desc)
-                .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
+                .ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
         }
         let mut parameters = Vec::new();
         for (name, (type_, description)) in x {
@@ -640,7 +635,7 @@ impl ModuleFile {
         let ext = self
             .path
             .extension()
-            .ok_or(ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
+            .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
         if ext == "xz" {
             let mut data = std::io::BufReader::new(data.as_slice());
             // FIXME: Write own xz library with an actual error type?
@@ -658,9 +653,9 @@ impl ModuleFile {
                 .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
             Ok(v)
         } else if ext == "ko" {
-            return Ok(data);
+            Ok(data)
         } else {
-            return Err(ModuleError::InvalidModule(COMPRESSION.into()));
+            Err(ModuleError::InvalidModule(COMPRESSION.into()))
         }
     }
 }
