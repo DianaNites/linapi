@@ -515,7 +515,6 @@ impl ModuleFile {
             .find_section_by_name(".modinfo")
             .ok_or(ModuleError::InvalidModule(MODINFO.into()))?;
         let data = sect.raw_data(&elf);
-        dbg!(data);
         //
         let mut map = HashMap::new();
         for kv in BufRead::split(data, b'\0') {
