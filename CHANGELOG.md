@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Decompression failures for `xz` compressed kernel modules.
+
 ## [0.4.0] - 2020-02-18
 
 ### Fixed
