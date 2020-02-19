@@ -44,8 +44,6 @@ use crate::{
 };
 #[cfg(feature = "gz")]
 use flate2::bufread::GzDecoder;
-#[cfg(feature = "xz")]
-use lzma_rs::xz_decompress;
 use nix::{
     kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
     sys::utsname::uname,
@@ -60,6 +58,8 @@ use std::{
 };
 use walkdir::WalkDir;
 use xmas_elf::ElfFile;
+#[cfg(feature = "xz")]
+use xz2::bufread::XzDecoder;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
@@ -714,15 +714,9 @@ impl ModuleFile {
         match ext {
             #[cfg(feature = "xz")]
             "xz" => {
-                let mut data = std::io::BufReader::new(data.as_slice());
-                // FIXME: Write own xz library with an actual error type?
-                xz_decompress(&mut data, &mut v).map_err(|e| {
-                    ModuleError::InvalidModule(match e {
-                        lzma_rs::error::Error::LZMAError(s) => s,
-                        lzma_rs::error::Error::XZError(s) => s,
-                        lzma_rs::error::Error::IOError(s) => s.to_string(),
-                    })
-                })?;
+                let mut data = XzDecoder::new(data.as_slice());
+                data.read_to_end(&mut v)
+                    .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
                 Ok(v)
             }
             #[cfg(feature = "gz")]

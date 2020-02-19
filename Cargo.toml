@@ -27,13 +27,13 @@ walkdir = "2.3.1"
 thiserror = "1.0.11"
 displaydoc = "0.1.5"
 xmas-elf = "0.7.0"
-lzma-rs = { version = "0.1.2", optional = true}
-flate2 = { version = "1.0.13", optional = true}
+flate2 = { version = "1.0.13", optional = true }
+xz2 = { version = "0.1.6", optional = true }
 
 [features]
 default = ["compression"]
 compression = ["xz", "gz"]
-xz = ["lzma-rs"]
+xz = ["xz2"]
 gz = ["flate2"]
 
 [badges]
