@@ -776,7 +776,7 @@ struct ModSig {
     signer: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModParam {
     /// Parameter name
     pub name: String,
