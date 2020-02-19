@@ -43,7 +43,7 @@ use crate::{
     },
 };
 #[cfg(feature = "gz")]
-use flate2::read::GzDecoder;
+use flate2::bufread::GzDecoder;
 #[cfg(feature = "xz")]
 use lzma_rs::xz_decompress;
 use nix::{
