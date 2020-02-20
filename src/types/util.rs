@@ -2,7 +2,12 @@
 use crate::{
     error::{device_text::*, DeviceError},
     types::{
-        device::{DevicePowerControl, DevicePowerStatus, Result as DeviceResult},
+        device::{
+            DevicePowerControl,
+            DevicePowerStatus,
+            DevicePowerWakeup,
+            Result as DeviceResult,
+        },
         UEventAction,
     },
 };
@@ -107,4 +112,22 @@ pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
         "disabled" => Ok(false),
         _ => Err(DeviceError::InvalidDevice(DEVICE)),
     })?
+}
+
+pub fn read_power_wakeup(path: &Path) -> DeviceResult<Option<DevicePowerWakeup>> {
+    Ok(Some(DevicePowerWakeup {
+        can_wakeup: fs::read_to_string(path.join("power/wakeup")).map(|s| match s.trim() {
+            "enabled" => Ok(true),
+            "disabled" => Ok(false),
+            _ => Err(DeviceError::InvalidDevice(DEVICE)),
+        })??,
+        count: fs::read_to_string(path.join("power/wakeup_count"))?
+            .trim()
+            .parse()
+            .map_err(|_| DeviceError::InvalidDevice(DEVICE))?,
+        count_active: fs::read_to_string(path.join("power/wakeup_active_count"))?
+            .trim()
+            .parse()
+            .map_err(|_| DeviceError::InvalidDevice(DEVICE))?,
+    }))
 }

@@ -31,69 +31,67 @@ pub enum DevicePowerStatus {
     Unsupported,
 }
 
-mod _ignore {
-    #![allow(dead_code)]
-    use super::*;
+/// Wakeup information for [`DevicePower::wakeup`]
+#[derive(Debug)]
+pub struct DevicePowerWakeup {
+    pub(crate) can_wakeup: bool,
+    pub(crate) count: u32,
+    pub(crate) count_active: u32,
+}
 
-    /// Wakeup information for [`DevicePower::wakeup`]
-    pub struct DevicePowerWakeup {}
+impl DevicePowerWakeup {
+    /// Whether this Device is allowed to wake the system up from sleep
+    /// states.
+    pub fn can_wakeup(&self) -> bool {
+        self.can_wakeup
+    }
 
-    impl DevicePowerWakeup {
-        /// Whether this Device is allowed to wake the system up from sleep
-        /// states.
-        ///
-        /// If the Device does not support this, [`None`] is returned.
-        pub fn can_wakeup(&self) -> bool {
-            todo!()
-        }
+    /// How many times this Device has signaled a wakeup event.
+    pub fn count(&self) -> u32 {
+        self.count
+    }
 
-        /// How many times this Device has signaled a wakeup event.
-        pub fn count(&self) -> u32 {
-            todo!()
-        }
+    /// How many times this Device has completed a wakeup event.
+    pub fn count_active(&self) -> u32 {
+        self.count_active
+    }
 
-        /// How many times this Device has completed a wakeup event.
-        pub fn count_active(&self) -> u32 {
-            todo!()
-        }
+    /// How many times this Device has aborted a system sleep state
+    /// transition.
+    fn _count_abort(&self) -> u32 {
+        todo!()
+    }
 
-        /// How many times this Device has aborted a system sleep state
-        /// transition.
-        pub fn count_abort(&self) -> u32 {
-            todo!()
-        }
+    /// How many times a wakeup event timed out.
+    fn _count_expired(&self) -> u32 {
+        todo!()
+    }
 
-        /// How many times a wakeup event timed out.
-        pub fn count_expired(&self) -> u32 {
-            todo!()
-        }
+    /// Whether a wakeup event is currently being processed.
+    fn _active(&self) -> bool {
+        todo!()
+    }
 
-        /// Whether a wakeup event is currently being processed.
-        pub fn active(&self) -> bool {
-            todo!()
-        }
+    /// Total time spent processing wakeup events from this Device.
+    fn _total_time(&self) -> Duration {
+        todo!()
+    }
 
-        /// Total time spent processing wakeup events from this Device.
-        pub fn total_time(&self) -> Duration {
-            todo!()
-        }
+    /// Maximum time spent processing a *single* wakeup event.
+    fn _max_time(&self) -> Duration {
+        todo!()
+    }
 
-        /// Maximum time spent processing a *single* wakeup event.
-        pub fn max_time(&self) -> Duration {
-            todo!()
-        }
+    /// Value of the monotonic clock corresponding to the time of
+    /// signaling the last wakeup event associated with this Device?
+    fn _last_time(&self) -> Duration {
+        todo!()
+    }
 
-        /// Value of the monotonic clock corresponding to the time of
-        /// signaling the last wakeup event associated with this Device?
-        pub fn last_time(&self) -> Duration {
-            todo!()
-        }
-
-        /// Total time this Device has prevented the System from transitioning
-        /// to a sleep state.
-        pub fn prevent_sleep_time(&self) -> Duration {
-            todo!()
-        }
+    /// Total time this Device has prevented the System from transitioning
+    /// to a sleep state.
+    fn _prevent_sleep_time(&self) -> Duration {
+        todo!()
     }
 }
 
@@ -146,34 +144,18 @@ pub struct PowerInfo {
     pub(crate) autosuspend_delay: Option<Duration>,
     pub(crate) status: DevicePowerStatus,
     pub(crate) async_: bool,
+    pub(crate) wakeup: Option<DevicePowerWakeup>,
 }
 
 impl PowerInfo {
-    //     /// Whether this Device is allowed to wake the system up from sleep
-    // states.     /// If the Device does not support this, [`None`] is returned.
-    //     ///
-    //     /// # Note
-    //     ///
-    //     /// This is a temporary kludge API
-    //     pub fn can_wakeup(&self) -> Option<bool> {
-    //         fs::read_to_string(self.device_path.join("power/wakeup"))
-    //             .map(|s| match s.trim() {
-    //                 "enabled" => true,
-    //                 "disabled" => false,
-    //                 _ => panic!("Unexpected `power/wakeup` value"),
-    //             })
-    //             .ok()
-    //     }
-
     /// Wakeup information.
     ///
     /// If this device is capable of waking the system up from sleep states,
     /// [`Some`] is returned.
     ///
     /// If the Device does not support this, [`None`] is returned.
-    // TODO: Implement this
-    fn _wakeup(&self) -> Option<()> {
-        todo!()
+    pub fn wakeup(&self) -> Option<&DevicePowerWakeup> {
+        self.wakeup.as_ref()
     }
 
     /// Current Device control setting

@@ -86,6 +86,7 @@ impl DeviceTrait for Device {
             autosuspend_delay: util::read_power_autosuspend_delay(&self.path)?,
             status: util::read_power_status(&self.path)?,
             async_: util::read_power_async(&self.path)?,
+            wakeup: util::read_power_wakeup(&self.path)?,
         });
         Ok(())
     }
