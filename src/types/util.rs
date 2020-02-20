@@ -1,6 +1,12 @@
 //! Utility functions
-use crate::types::UEventAction;
-use std::{collections::HashMap, fs, io::prelude::*, path::Path};
+use crate::{
+    error::{device_text::*, DeviceError},
+    types::{
+        device::{DevicePowerControl, DevicePowerStatus, Result as DeviceResult},
+        UEventAction,
+    },
+};
+use std::{collections::HashMap, fs, io::prelude::*, path::Path, time::Duration};
 
 /// Read a uevent file
 ///
@@ -50,4 +56,55 @@ pub fn write_uevent(
     //
     let mut f = fs::OpenOptions::new().write(true).open(path).unwrap();
     f.write_all(data.trim().as_bytes()).unwrap();
+}
+
+pub fn read_subsystem(path: &Path) -> DeviceResult<String> {
+    fs::read_link(path.join("subsystem"))?
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.into())
+        .ok_or_else(|| DeviceError::InvalidDevice(DEVICE))
+}
+
+pub fn read_driver(path: &Path) -> DeviceResult<Option<String>> {
+    fs::read_link(path.join("driver"))?
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| Some(s.into()))
+        .ok_or_else(|| DeviceError::InvalidDevice(DEVICE))
+}
+
+pub fn read_power_control(path: &Path) -> DeviceResult<DevicePowerControl> {
+    fs::read_to_string(path.join("power/control")).map(|s| match s.trim() {
+        "auto" => Ok(DevicePowerControl::Auto),
+        "on" => Ok(DevicePowerControl::On),
+        _ => Err(DeviceError::InvalidDevice(DEVICE)),
+    })?
+}
+
+pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration>> {
+    Ok(fs::read_to_string(path.join("power/autosuspend_delay_ms"))
+        .map(|s| s.trim().parse())?
+        .map(|s| Duration::from_millis(s))
+        .ok())
+}
+
+pub fn read_power_status(path: &Path) -> DeviceResult<DevicePowerStatus> {
+    fs::read_to_string(path.join("power/runtime_status")).map(|s| match s.trim() {
+        "suspended" => Ok(DevicePowerStatus::Suspended),
+        "suspending" => Ok(DevicePowerStatus::Suspending),
+        "resuming" => Ok(DevicePowerStatus::Resuming),
+        "active" => Ok(DevicePowerStatus::Active),
+        "error" => Ok(DevicePowerStatus::FatalError),
+        "unsupported" => Ok(DevicePowerStatus::Unsupported),
+        _ => Err(DeviceError::InvalidDevice(DEVICE)),
+    })?
+}
+
+pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
+    fs::read_to_string(path.join("power/async")).map(|s| match s.trim() {
+        "enabled" => Ok(true),
+        "disabled" => Ok(false),
+        _ => Err(DeviceError::InvalidDevice(DEVICE)),
+    })?
 }

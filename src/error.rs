@@ -19,6 +19,16 @@ pub enum ModuleError {
     InvalidModule(String),
 }
 
+/// Error type for [`linapi::types`]
+#[derive(Debug, Display, Error)]
+pub enum DeviceError {
+    /// IO Failed: {0}
+    Io(#[from] io::Error),
+
+    /// Device was invalid: `{0}`
+    InvalidDevice(&'static str),
+}
+
 /// Error text.
 pub(crate) mod text {
     pub const INVALID_EXTENSION: &str = "invalid or missing extension";
@@ -32,4 +42,8 @@ pub(crate) mod text {
     pub const PARAMETER: &str = "invalid module parameter name";
 
     pub const MODINFO: &str = "invalid .modinfo";
+}
+
+pub(crate) mod device_text {
+    pub const DEVICE: &str = "missing expected attribute";
 }

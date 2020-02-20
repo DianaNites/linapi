@@ -1,7 +1,11 @@
 //! Interfaces common to all devices
-use std::{fs, path::Path, time::Duration};
+use crate::error::DeviceError;
+use std::{path::Path, time::Duration};
+
+pub type Result<T, E = DeviceError> = std::result::Result<T, E>;
 
 /// [`DevicePower::control`] Controls
+#[derive(Debug, Copy, Clone)]
 pub enum DevicePowerControl {
     /// Device power is automatically managed by the system, and it may be
     /// automatically suspended
@@ -17,6 +21,7 @@ pub enum DevicePowerControl {
 }
 
 /// [`DevicePower::status`] Status.
+#[derive(Debug, Copy, Clone)]
 pub enum DevicePowerStatus {
     Suspended,
     Suspending,
@@ -92,14 +97,20 @@ mod _ignore {
     }
 }
 
-/// Information about one specific Device.
+/// Describes a Linux Device.
 ///
 /// This is the most general interface, so you can do the least with it.
 ///
-/// This interface is constructed to follow the [sysfs rules][1]
+/// This interface is constructed to follow the [sysfs rules][1].
+///
+/// Some basic information about the Device *should* be read on
+/// construction through the [`Device::refresh`] method.
 ///
 /// [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
 pub trait Device {
+    /// Refresh information on a Device.
+    fn refresh(&mut self) -> Result<()>;
+
     /// The canonical path to the Device.
     ///
     /// # Note
@@ -110,62 +121,49 @@ pub trait Device {
 
     /// Kernel name of the Device, ie `sda`. Identical to the last element of
     /// [`Device::device_path`]
-    fn kernel_name(&self) -> String {
-        self.device_path()
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .into()
+    fn kernel_name(&self) -> &str {
+        // Unwraps should be okay, if not it means `device_path` is invalid.
+        self.device_path().file_stem().unwrap().to_str().unwrap()
     }
 
     /// Name of the driver for this Device, or [`None`].
-    fn driver(&self) -> Option<String> {
-        fs::read_link(self.device_path().join("driver"))
-            .map(|s| s.file_stem().unwrap().to_str().unwrap().into())
-            .ok()
-    }
+    fn driver(&self) -> Option<&str>;
 
     /// Name of the subsystem for this Device.
-    fn subsystem(&self) -> String {
-        fs::read_link(self.device_path().join("subsystem"))
-            .map(|s| s.file_stem().unwrap().to_str().unwrap().into())
-            .unwrap()
-    }
+    fn subsystem(&self) -> &str;
 
     /// Device Power Management
     ///
     /// See the [kernel docs][1] for details.
     ///
     /// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
-    fn power(&self) -> PowerInfo {
-        PowerInfo {
-            device_path: self.device_path(),
-        }
-    }
+    fn power(&self) -> &PowerInfo;
 }
 
-pub struct PowerInfo<'a> {
-    device_path: &'a Path,
+#[derive(Debug)]
+pub struct PowerInfo {
+    pub(crate) control: DevicePowerControl,
+    pub(crate) autosuspend_delay: Option<Duration>,
+    pub(crate) status: DevicePowerStatus,
+    pub(crate) async_: bool,
 }
 
-impl PowerInfo<'_> {
-    /// Whether this Device is allowed to wake the system up from sleep states.
-    ///
-    /// If the Device does not support this, [`None`] is returned.
-    ///
-    /// # Note
-    ///
-    /// This is a temporary kludge API
-    pub fn can_wakeup(&self) -> Option<bool> {
-        fs::read_to_string(self.device_path.join("power/wakeup"))
-            .map(|s| match s.trim() {
-                "enabled" => true,
-                "disabled" => false,
-                _ => panic!("Unexpected `power/wakeup` value"),
-            })
-            .ok()
-    }
+impl PowerInfo {
+    //     /// Whether this Device is allowed to wake the system up from sleep
+    // states.     /// If the Device does not support this, [`None`] is returned.
+    //     ///
+    //     /// # Note
+    //     ///
+    //     /// This is a temporary kludge API
+    //     pub fn can_wakeup(&self) -> Option<bool> {
+    //         fs::read_to_string(self.device_path.join("power/wakeup"))
+    //             .map(|s| match s.trim() {
+    //                 "enabled" => true,
+    //                 "disabled" => false,
+    //                 _ => panic!("Unexpected `power/wakeup` value"),
+    //             })
+    //             .ok()
+    //     }
 
     /// Wakeup information.
     ///
@@ -180,13 +178,7 @@ impl PowerInfo<'_> {
 
     /// Current Device control setting
     pub fn control(&self) -> DevicePowerControl {
-        fs::read_to_string(self.device_path.join("power/control"))
-            .map(|s| match s.trim() {
-                "auto" => DevicePowerControl::Auto,
-                "on" => DevicePowerControl::On,
-                _ => panic!("Unexpected `power/control` value"),
-            })
-            .unwrap()
+        self.control
     }
 
     /// How long the device will wait after becoming idle before being
@@ -194,37 +186,19 @@ impl PowerInfo<'_> {
     ///
     /// [`None`] is returned if this is unsupported.
     pub fn autosuspend_delay(&self) -> Option<Duration> {
-        fs::read_to_string(self.device_path.join("power/autosuspend_delay_ms"))
-            .map(|s| Duration::from_millis(s.trim().parse().unwrap()))
-            .ok()
+        self.autosuspend_delay
     }
 
     /// Current Power Management Status of the Device.
     pub fn status(&self) -> DevicePowerStatus {
-        fs::read_to_string(self.device_path.join("power/runtime_status"))
-            .map(|s| match s.trim() {
-                "suspended" => DevicePowerStatus::Suspended,
-                "suspending" => DevicePowerStatus::Suspending,
-                "resuming" => DevicePowerStatus::Resuming,
-                "active" => DevicePowerStatus::Active,
-                "error" => DevicePowerStatus::FatalError,
-                "unsupported" => DevicePowerStatus::Unsupported,
-                _ => panic!("Unexpected `power/runtime_status` value"),
-            })
-            .unwrap()
+        self.status
     }
 
     /// Whether the device is suspended/resumed asynchronously. during
     /// system-wide power transitions.
     ///
     /// This defaults to `false` for most devices.
-    pub fn r#async(&self) -> bool {
-        fs::read_to_string(self.device_path.join("power/async"))
-            .map(|s| match s.trim() {
-                "enabled" => true,
-                "disabled" => false,
-                _ => panic!("Unexpected `power/async` value"),
-            })
-            .unwrap()
+    pub fn async_(&self) -> bool {
+        self.async_
     }
 }
