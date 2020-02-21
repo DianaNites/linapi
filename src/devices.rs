@@ -2,12 +2,16 @@
 //!
 //! Linux primarily exposes connected devices through sysfs,
 //! most of those interfaces undocumented.
-use crate::types::{
-    util,
-    BlockDevice as BlockDeviceTrait,
-    Device as DeviceTrait,
-    Result,
-    SYSFS_PATH,
+use crate::{
+    error::DeviceError,
+    types::{
+        util,
+        BlockCap,
+        BlockDevice as BlockDeviceTrait,
+        Device as DeviceTrait,
+        Result,
+        SYSFS_PATH,
+    },
 };
 use std::{
     fs::{read_dir, DirEntry},
@@ -108,11 +112,27 @@ impl DeviceTrait for Device {
 
 /// Represents a Block Device
 #[derive(Debug)]
-pub struct BlockDevice(Device);
+pub struct BlockDevice {
+    dev: Device,
+    major: u32,
+    minor: u32,
+    capability: BlockCap,
+    size: u64,
+    alignment_offset: u64,
+    discard_alignment_offset: u64,
+}
 
 impl BlockDevice {
     pub fn from_device(dev: Device) -> Self {
-        Self(dev)
+        Self {
+            dev,
+            major: 0,
+            minor: 0,
+            capability: BlockCap::empty(),
+            size: 0,
+            alignment_offset: 0,
+            discard_alignment_offset: 0,
+        }
     }
 
     /// Get connected block devices
@@ -134,25 +154,92 @@ impl BlockDevice {
 
 impl DeviceTrait for BlockDevice {
     fn refresh(&mut self) -> Result<()> {
-        self.0.refresh()?;
-        todo!()
+        self.dev.refresh()?;
+        let (major, minor) = {
+            let dev = std::fs::read_to_string(self.device_path().join("dev"))?;
+            let mut dev = dev.trim().split(':');
+            (
+                dev.next()
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid major"))?,
+                dev.next()
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid minor"))?,
+            )
+        };
+        self.major = major;
+        self.minor = minor;
+        // Unknown bits are safe, and the kernel may add new flags.
+        self.capability = unsafe {
+            BlockCap::from_bits_unchecked(
+                std::fs::read_to_string(self.device_path().join("capability"))?
+                    .trim()
+                    .parse()
+                    .map_err(|_| DeviceError::InvalidDevice("Invalid capability"))?,
+            )
+        };
+        self.size = std::fs::read_to_string(self.device_path().join("size"))?
+            .trim()
+            .parse()
+            .map_err(|_| DeviceError::InvalidDevice("Invalid size"))?;
+        self.alignment_offset =
+            std::fs::read_to_string(self.device_path().join("alignment_offset"))?
+                .trim()
+                .parse()
+                .map_err(|_| DeviceError::InvalidDevice("Invalid alignment_offset"))?;
+
+        self.discard_alignment_offset =
+            std::fs::read_to_string(self.device_path().join("discard_alignment"))?
+                .trim()
+                .parse()
+                .map_err(|_| DeviceError::InvalidDevice("Invalid discard_alignment"))?;
+        //
+        Ok(())
     }
 
     fn device_path(&self) -> &Path {
-        self.0.device_path()
+        self.dev.device_path()
     }
 
     fn subsystem(&self) -> &str {
-        self.0.subsystem()
+        self.dev.subsystem()
     }
 
     fn driver(&self) -> Option<&str> {
-        self.0.driver()
+        self.dev.driver()
     }
 
     fn power(&self) -> &crate::types::PowerInfo {
-        self.0.power()
+        self.dev.power()
     }
 }
 
-impl BlockDeviceTrait for BlockDevice {}
+impl BlockDeviceTrait for BlockDevice {
+    fn major(&self) -> u32 {
+        self.major
+    }
+
+    fn minor(&self) -> u32 {
+        self.minor
+    }
+
+    fn capability(&self) -> BlockCap {
+        self.capability
+    }
+
+    fn size(&self) -> u64 {
+        self.size
+    }
+
+    fn alignment_offset(&self) -> u64 {
+        self.alignment_offset
+    }
+
+    fn discard_alignment_offset(&self) -> u64 {
+        self.discard_alignment_offset
+    }
+
+    fn partitions(&self) -> Vec<Box<dyn crate::types::BlockDevicePartition>> {
+        todo!()
+    }
+}

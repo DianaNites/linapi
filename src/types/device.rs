@@ -107,6 +107,12 @@ impl DevicePowerWakeup {
 /// [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
 pub trait Device {
     /// Refresh information on a Device.
+    ///
+    /// # Note
+    ///
+    /// As this information is from the filesystem, it is not atomic or
+    /// representative of a specific moment in time.
+    /// Linux provides no way to do that.
     fn refresh(&mut self) -> Result<()>;
 
     /// The canonical path to the Device.

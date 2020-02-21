@@ -56,28 +56,24 @@ bitflags! {
 /// documentation.
 ///
 /// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-block
+///
+/// # Implementation
+///
+/// [`Device::refresh`] should be implemented to refresh this information, too.
 pub trait BlockDevice: Device {
     /// Major Device Number
     ///
     /// # Note
     ///
     /// This interface uses the `dev` file, which is undocumented.
-    fn major(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("dev"))
-            .map(|s| s.trim().split(':').next().unwrap().parse().unwrap())
-            .unwrap()
-    }
+    fn major(&self) -> u32;
 
     /// Minor Device Number
     ///
     /// # Note
     ///
     /// This interface uses the `dev` file, which is undocumented.
-    fn minor(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("dev"))
-            .map(|s| s.trim().rsplit(':').next().unwrap().parse().unwrap())
-            .unwrap()
-    }
+    fn minor(&self) -> u32;
 
     /// Device capabilities. See [`BlockCap`] for details.
     ///
@@ -87,16 +83,7 @@ pub trait BlockDevice: Device {
     /// flags if need be.
     ///
     /// Unknown flags *are* preserved.
-    fn capability(&self) -> BlockCap {
-        // Unknown bits are safe, and the kernel may add new flags.
-        unsafe {
-            BlockCap::from_bits_unchecked(
-                fs::read_to_string(self.device_path().join("capability"))
-                    .map(|s| s.trim().parse().unwrap())
-                    .unwrap(),
-            )
-        }
-    }
+    fn capability(&self) -> BlockCap;
 
     /// Size of the Block Device, in bytes.
     ///
@@ -107,32 +94,18 @@ pub trait BlockDevice: Device {
     /// 20 years, however.
     ///
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    fn size(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("size"))
-            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
-            .unwrap()
-    }
+    fn size(&self) -> u64;
 
     /// How many bytes the beginning of the device is
     /// offset from the disk's natural alignment.
-    fn alignment_offset(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.trim().parse().unwrap())
-            .unwrap()
-    }
+    fn alignment_offset(&self) -> u64;
 
     /// How many bytes the beginning of the device is offset from the disk's
     /// natural alignment.
-    fn discard_alignment_offset(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.trim().parse().unwrap())
-            .unwrap()
-    }
+    fn discard_alignment_offset(&self) -> u64;
 
     /// Partitions this Block Device has
-    fn partitions(&self) -> Vec<Box<dyn BlockDevicePartition>> {
-        todo!()
-    }
+    fn partitions(&self) -> Vec<Box<dyn BlockDevicePartition>>;
 }
 
 /// A Partition of a Linux Block Device
