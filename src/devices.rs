@@ -4,14 +4,7 @@
 //! most of those interfaces undocumented.
 use crate::{
     error::DeviceError,
-    types::{
-        util,
-        BlockCap,
-        BlockDevice as BlockDeviceTrait,
-        Device as DeviceTrait,
-        Result,
-        SYSFS_PATH,
-    },
+    types::{util, BlockCap, BlockDevice as BlockDeviceTrait, Device, Result, SYSFS_PATH},
 };
 use std::{
     fs::{read_dir, DirEntry},
@@ -20,7 +13,7 @@ use std::{
 
 /// Represents one specific Device
 #[derive(Debug)]
-pub struct Device {
+pub struct RawDevice {
     path: PathBuf,
     subsystem: Option<String>,
     driver: Option<String>,
@@ -28,9 +21,9 @@ pub struct Device {
     power: Option<crate::types::PowerInfo>,
 }
 
-impl Device {
+impl RawDevice {
     /// Get connected devices by their subsystem name
-    pub fn get_connected(subsystem: &str) -> Result<Vec<Device>> {
+    pub fn get_connected(subsystem: &str) -> Result<Vec<Self>> {
         let sysfs = Path::new(SYSFS_PATH);
         let mut devices = Vec::new();
         //
@@ -77,7 +70,7 @@ impl Device {
     }
 }
 
-impl DeviceTrait for Device {
+impl Device for RawDevice {
     fn device_path(&self) -> &Path {
         &self.path
     }
@@ -113,7 +106,7 @@ impl DeviceTrait for Device {
 /// Represents a Block Device
 #[derive(Debug)]
 pub struct BlockDevice {
-    dev: Device,
+    dev: RawDevice,
     major: u32,
     minor: u32,
     capability: BlockCap,
@@ -123,7 +116,7 @@ pub struct BlockDevice {
 }
 
 impl BlockDevice {
-    pub fn from_device(dev: Device) -> Self {
+    pub fn from_device(dev: RawDevice) -> Self {
         Self {
             dev,
             major: 0,
@@ -141,7 +134,7 @@ impl BlockDevice {
     ///
     /// This skips partitions, which may appear in the block subsystems.
     pub fn get_connected() -> Result<Vec<Self>> {
-        Ok(Device::get_connected("block")?
+        Ok(RawDevice::get_connected("block")?
             .into_iter()
             // partition is undocumented.
             .filter(|d| !d.device_path().join("partition").exists())
@@ -152,7 +145,7 @@ impl BlockDevice {
     // TODO: Block Device ioctls
 }
 
-impl DeviceTrait for BlockDevice {
+impl Device for BlockDevice {
     fn refresh(&mut self) -> Result<()> {
         self.dev.refresh()?;
         let (major, minor) = {
