@@ -105,11 +105,11 @@ pub trait BlockDevice: Device {
     fn discard_alignment_offset(&self) -> u64;
 
     /// Partitions this Block Device has
-    fn partitions(&self) -> Vec<Box<dyn BlockDevicePartition>>;
+    fn partitions(&self) -> &Vec<Box<dyn BlockDevicePartition>>;
 }
 
 /// A Partition of a Linux Block Device
-pub trait BlockDevicePartition: Device {
+pub trait BlockDevicePartition: Device + std::fmt::Debug {
     fn parent(&self) -> Box<dyn BlockDevice>;
 
     /// How many bytes the beginning of the partition is

@@ -113,6 +113,7 @@ pub struct BlockDevice {
     size: u64,
     alignment_offset: u64,
     discard_alignment_offset: u64,
+    partitions: Vec<Box<dyn crate::types::BlockDevicePartition>>,
 }
 
 impl BlockDevice {
@@ -125,6 +126,7 @@ impl BlockDevice {
             size: 0,
             alignment_offset: 0,
             discard_alignment_offset: 0,
+            partitions: Vec::new(),
         }
     }
 
@@ -186,6 +188,16 @@ impl Device for BlockDevice {
                 .trim()
                 .parse()
                 .map_err(|_| DeviceError::InvalidDevice("Invalid discard_alignment"))?;
+
+        for dir in read_dir(self.device_path())? {
+            let dir: DirEntry = dir?;
+            if !dir.path().join("partition").exists() {
+                continue;
+            }
+            // self.partitions.push(Box::new());
+        }
+        todo!();
+
         //
         Ok(())
     }
@@ -232,7 +244,7 @@ impl BlockDeviceTrait for BlockDevice {
         self.discard_alignment_offset
     }
 
-    fn partitions(&self) -> Vec<Box<dyn crate::types::BlockDevicePartition>> {
-        todo!()
+    fn partitions(&self) -> &Vec<Box<dyn crate::types::BlockDevicePartition>> {
+        &self.partitions
     }
 }
