@@ -60,7 +60,7 @@ bitflags! {
 /// # Implementation
 ///
 /// [`Device::refresh`] should be implemented to refresh this information, too.
-pub trait BlockDevice: Device {
+pub trait Block: Device {
     /// Major Device Number
     ///
     /// # Note
@@ -105,13 +105,15 @@ pub trait BlockDevice: Device {
     fn discard_alignment_offset(&self) -> u64;
 
     /// Partitions this Block Device has
-    fn partitions(&self) -> &Vec<Box<dyn BlockDevicePartition>>;
+    fn partitions(&self) -> &Vec<Partition>;
 }
 
 /// A Partition of a Linux Block Device
-pub trait BlockDevicePartition: Device + std::fmt::Debug {
-    fn parent(&self) -> Box<dyn BlockDevice>;
+pub struct Partition {
+    power: Option<crate::types::PowerInfo>,
+}
 
+impl Partition {
     /// How many bytes the beginning of the partition is
     /// offset from the disk's natural alignment.
     fn alignment_offset(&self) -> u64 {
@@ -157,4 +159,27 @@ pub trait BlockDevicePartition: Device + std::fmt::Debug {
             .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
+}
+
+impl Device for Partition {
+    fn refresh(&mut self) -> super::Result<()> {
+        unimplemented!()
+    }
+    fn device_path(&self) -> &std::path::Path {
+        unimplemented!()
+    }
+    fn driver(&self) -> Option<&str> {
+        unimplemented!()
+    }
+    fn subsystem(&self) -> &str {
+        unimplemented!()
+    }
+    fn power(&self) -> &super::PowerInfo {
+        unimplemented!()
+    }
+}
+
+/// A Partition of a Linux Block Device
+pub trait BlockDevicePartition: Device + std::fmt::Debug {
+    fn parent(&self) -> Box<dyn Block>;
 }

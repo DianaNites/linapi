@@ -4,7 +4,7 @@
 //! most of those interfaces undocumented.
 use crate::{
     error::DeviceError,
-    types::{util, BlockCap, BlockDevice as BlockDeviceTrait, Device, Result, SYSFS_PATH},
+    types::{util, Block, BlockCap, Device, Partition, Result, SYSFS_PATH},
 };
 use std::{
     fs::{read_dir, DirEntry},
@@ -113,7 +113,8 @@ pub struct BlockDevice {
     size: u64,
     alignment_offset: u64,
     discard_alignment_offset: u64,
-    partitions: Vec<Box<dyn crate::types::BlockDevicePartition>>,
+    // partitions: Vec<Partition>,
+    partitions: Vec<()>,
 }
 
 impl BlockDevice {
@@ -219,7 +220,7 @@ impl Device for BlockDevice {
     }
 }
 
-impl BlockDeviceTrait for BlockDevice {
+impl Block for BlockDevice {
     fn major(&self) -> u32 {
         self.major
     }
@@ -244,7 +245,8 @@ impl BlockDeviceTrait for BlockDevice {
         self.discard_alignment_offset
     }
 
-    fn partitions(&self) -> &Vec<Box<dyn crate::types::BlockDevicePartition>> {
-        &self.partitions
+    fn partitions(&self) -> &Vec<Partition> {
+        // &self.partitions
+        todo!()
     }
 }
