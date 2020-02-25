@@ -1,4 +1,4 @@
-//! Linux-specific Extensions to std types
+//! Linux-specific extensions to std types
 use nix::sys::memfd::{memfd_create, MemFdCreateFlag};
 use std::{
     ffi::CString,

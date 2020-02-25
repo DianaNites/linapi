@@ -1,17 +1,22 @@
 //! Utility functions
 use crate::{
     error::{device_text::*, DeviceError},
-    types::{
-        device::{
-            DevicePowerControl,
-            DevicePowerStatus,
-            DevicePowerWakeup,
-            Result as DeviceResult,
-        },
+    system::{
+        devices::raw::{Control, Result as DeviceResult, Status, Wakeup},
         UEventAction,
     },
 };
 use std::{collections::HashMap, fs, io::prelude::*, path::Path, time::Duration};
+
+/// Technically Linux requires sysfs to be at `/sys`, calling it a system
+/// configuration error otherwise.
+///
+/// But theres an upcoming distro planning to experiment with filesystem layout
+/// changes, including of `/sys`, so do this to allow easily changing it.
+pub const SYSFS_PATH: &str = "/sys";
+
+/// Kernel Module location. Same reasons as [`SYSFS_PATH`].
+pub const MODULE_PATH: &str = "/lib/modules";
 
 /// Read a uevent file
 ///
@@ -79,10 +84,10 @@ pub fn read_driver(path: &Path) -> DeviceResult<Option<String>> {
         .ok_or_else(|| DeviceError::InvalidDevice(DEVICE))
 }
 
-pub fn read_power_control(path: &Path) -> DeviceResult<DevicePowerControl> {
+pub fn read_power_control(path: &Path) -> DeviceResult<Control> {
     fs::read_to_string(path.join("power/control")).map(|s| match s.trim() {
-        "auto" => Ok(DevicePowerControl::Auto),
-        "on" => Ok(DevicePowerControl::On),
+        "auto" => Ok(Control::Auto),
+        "on" => Ok(Control::On),
         _ => Err(DeviceError::InvalidDevice(DEVICE)),
     })?
 }
@@ -94,14 +99,14 @@ pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration
         .ok())
 }
 
-pub fn read_power_status(path: &Path) -> DeviceResult<DevicePowerStatus> {
+pub fn read_power_status(path: &Path) -> DeviceResult<Status> {
     fs::read_to_string(path.join("power/runtime_status")).map(|s| match s.trim() {
-        "suspended" => Ok(DevicePowerStatus::Suspended),
-        "suspending" => Ok(DevicePowerStatus::Suspending),
-        "resuming" => Ok(DevicePowerStatus::Resuming),
-        "active" => Ok(DevicePowerStatus::Active),
-        "error" => Ok(DevicePowerStatus::FatalError),
-        "unsupported" => Ok(DevicePowerStatus::Unsupported),
+        "suspended" => Ok(Status::Suspended),
+        "suspending" => Ok(Status::Suspending),
+        "resuming" => Ok(Status::Resuming),
+        "active" => Ok(Status::Active),
+        "error" => Ok(Status::FatalError),
+        "unsupported" => Ok(Status::Unsupported),
         _ => Err(DeviceError::InvalidDevice(DEVICE)),
     })?
 }
@@ -114,8 +119,8 @@ pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
     })?
 }
 
-pub fn read_power_wakeup(path: &Path) -> DeviceResult<Option<DevicePowerWakeup>> {
-    Ok(Some(DevicePowerWakeup {
+pub fn read_power_wakeup(path: &Path) -> DeviceResult<Option<Wakeup>> {
+    Ok(Some(Wakeup {
         can_wakeup: fs::read_to_string(path.join("power/wakeup")).map(|s| match s.trim() {
             "enabled" => Ok(true),
             "disabled" => Ok(false),

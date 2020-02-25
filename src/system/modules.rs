@@ -34,13 +34,8 @@
 use crate::{
     error::{text::*, ModuleError},
     extensions::FileExt,
-    types::{
-        util::{read_uevent, write_uevent},
-        UEvent,
-        UEventAction,
-        MODULE_PATH,
-        SYSFS_PATH,
-    },
+    system::{UEvent, UEventAction},
+    util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
 };
 #[cfg(feature = "gz")]
 use flate2::bufread::GzDecoder;

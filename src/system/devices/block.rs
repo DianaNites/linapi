@@ -1,7 +1,14 @@
 //! Interfaces common to Block devices
-use super::device::Device;
+use crate::{
+    error::DeviceError,
+    system::devices::raw::{Device, Power, RawDevice, Result},
+};
 use bitflags::bitflags;
-use std::fs;
+use std::{
+    fs,
+    fs::{read_dir, DirEntry},
+    path::{Path, PathBuf},
+};
 
 bitflags! {
     /// Flags corresponding to [`BlockDevice::capability`].
@@ -109,14 +116,19 @@ pub trait Block: Device {
 }
 
 /// A Partition of a Linux Block Device
+#[derive(Debug)]
 pub struct Partition {
-    power: Option<crate::types::PowerInfo>,
+    device_path: PathBuf,
 }
 
 impl Partition {
+    pub fn device_path(&self) -> &Path {
+        &self.device_path
+    }
+
     /// How many bytes the beginning of the partition is
     /// offset from the disk's natural alignment.
-    fn alignment_offset(&self) -> u64 {
+    pub fn alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("alignment_offset"))
             .map(|s| s.trim().parse().unwrap())
             .unwrap()
@@ -124,7 +136,7 @@ impl Partition {
 
     /// How many bytes the beginning of the partition is offset from the
     /// disk's natural alignment.
-    fn discard_alignment_offset(&self) -> u64 {
+    pub fn discard_alignment_offset(&self) -> u64 {
         fs::read_to_string(self.device_path().join("discard_alignment"))
             .map(|s| s.trim().parse().unwrap())
             .unwrap()
@@ -139,7 +151,7 @@ impl Partition {
     /// 20 years, however.
     ///
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    fn size(&self) -> u64 {
+    pub fn size(&self) -> u64 {
         fs::read_to_string(self.device_path().join("size"))
             .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
@@ -154,32 +166,154 @@ impl Partition {
     /// 20 years, however.
     ///
     /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    fn start(&self) -> u64 {
+    pub fn start(&self) -> u64 {
         fs::read_to_string(self.device_path().join("start"))
             .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
 }
 
-impl Device for Partition {
-    fn refresh(&mut self) -> super::Result<()> {
-        unimplemented!()
+/// Represents a Block Device
+#[derive(Debug)]
+pub struct BlockDevice {
+    dev: RawDevice,
+    major: u32,
+    minor: u32,
+    capability: BlockCap,
+    size: u64,
+    alignment_offset: u64,
+    discard_alignment_offset: u64,
+    partitions: Vec<Partition>,
+}
+
+impl BlockDevice {
+    pub fn from_device(dev: RawDevice) -> Self {
+        Self {
+            dev,
+            major: 0,
+            minor: 0,
+            capability: BlockCap::empty(),
+            size: 0,
+            alignment_offset: 0,
+            discard_alignment_offset: 0,
+            partitions: Vec::new(),
+        }
     }
-    fn device_path(&self) -> &std::path::Path {
-        unimplemented!()
+
+    /// Get connected block devices
+    ///
+    /// # Note
+    ///
+    /// This skips partitions, which may appear in the block subsystems.
+    pub fn get_connected() -> Result<Vec<Self>> {
+        Ok(RawDevice::get_connected("block")?
+            .into_iter()
+            // partition is undocumented.
+            .filter(|d| !d.device_path().join("partition").exists())
+            .map(BlockDevice::from_device)
+            .collect())
     }
-    fn driver(&self) -> Option<&str> {
-        unimplemented!()
+
+    // TODO: Block Device ioctls
+}
+
+impl Device for BlockDevice {
+    fn refresh(&mut self) -> Result<()> {
+        self.dev.refresh()?;
+        let (major, minor) = {
+            let dev = std::fs::read_to_string(self.device_path().join("dev"))?;
+            let mut dev = dev.trim().split(':');
+            (
+                dev.next()
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid major"))?,
+                dev.next()
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid minor"))?,
+            )
+        };
+        self.major = major;
+        self.minor = minor;
+        // Unknown bits are safe, and the kernel may add new flags.
+        self.capability = unsafe {
+            BlockCap::from_bits_unchecked(
+                std::fs::read_to_string(self.device_path().join("capability"))?
+                    .trim()
+                    .parse()
+                    .map_err(|_| DeviceError::InvalidDevice("Invalid capability"))?,
+            )
+        };
+        self.size = std::fs::read_to_string(self.device_path().join("size"))?
+            .trim()
+            .parse()
+            .map_err(|_| DeviceError::InvalidDevice("Invalid size"))?;
+        self.alignment_offset =
+            std::fs::read_to_string(self.device_path().join("alignment_offset"))?
+                .trim()
+                .parse()
+                .map_err(|_| DeviceError::InvalidDevice("Invalid alignment_offset"))?;
+
+        self.discard_alignment_offset =
+            std::fs::read_to_string(self.device_path().join("discard_alignment"))?
+                .trim()
+                .parse()
+                .map_err(|_| DeviceError::InvalidDevice("Invalid discard_alignment"))?;
+
+        for dir in read_dir(self.device_path())? {
+            let dir: DirEntry = dir?;
+            if !dir.path().join("partition").exists() {
+                continue;
+            }
+            // self.partitions.push(Box::new());
+        }
+
+        //
+        Ok(())
     }
+
+    fn device_path(&self) -> &Path {
+        self.dev.device_path()
+    }
+
     fn subsystem(&self) -> &str {
-        unimplemented!()
+        self.dev.subsystem()
     }
-    fn power(&self) -> &super::PowerInfo {
-        unimplemented!()
+
+    fn driver(&self) -> Option<&str> {
+        self.dev.driver()
+    }
+
+    fn power(&self) -> &Power {
+        self.dev.power()
     }
 }
 
-/// A Partition of a Linux Block Device
-pub trait BlockDevicePartition: Device + std::fmt::Debug {
-    fn parent(&self) -> Box<dyn Block>;
+impl Block for BlockDevice {
+    fn major(&self) -> u32 {
+        self.major
+    }
+
+    fn minor(&self) -> u32 {
+        self.minor
+    }
+
+    fn capability(&self) -> BlockCap {
+        self.capability
+    }
+
+    fn size(&self) -> u64 {
+        self.size
+    }
+
+    fn alignment_offset(&self) -> u64 {
+        self.alignment_offset
+    }
+
+    fn discard_alignment_offset(&self) -> u64 {
+        self.discard_alignment_offset
+    }
+
+    fn partitions(&self) -> &Vec<Partition> {
+        &self.partitions
+    }
 }

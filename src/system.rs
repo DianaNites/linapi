@@ -1,22 +1,12 @@
-//! Types and interfaces common to this crate.
-use self::util::{read_uevent, write_uevent};
+//! This module provides ways to get information about a running Linux system
+use crate::{
+    system::devices::raw::Device,
+    util::{read_uevent, write_uevent},
+};
 use std::collections::HashMap;
 
-mod block;
-mod device;
-
-pub(crate) mod util;
-pub use self::{block::*, device::*};
-
-/// Technically Linux requires sysfs to be at `/sys`, calling it a system
-/// configuration error otherwise.
-///
-/// But theres an upcoming distro planning to experiment with filesystem layout
-/// changes, including of `/sys`, so do this to allow easily changing it.
-pub(crate) const SYSFS_PATH: &str = "/sys";
-
-/// Kernel Module location. Same reasons as [`SYSFS_PATH`].
-pub(crate) const MODULE_PATH: &str = "/lib/modules";
+pub mod devices;
+pub mod modules;
 
 /// Supported [`UEvent`] actions
 pub enum UEventAction {
