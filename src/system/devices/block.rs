@@ -259,12 +259,15 @@ impl Device for BlockDevice {
                 .parse()
                 .map_err(|_| DeviceError::InvalidDevice("Invalid discard_alignment"))?;
 
+        self.partitions.clear();
         for dir in read_dir(self.device_path())? {
             let dir: DirEntry = dir?;
             if !dir.path().join("partition").exists() {
                 continue;
             }
-            // self.partitions.push(Box::new());
+            self.partitions.push(Partition {
+                device_path: dir.path(),
+            });
         }
 
         //
