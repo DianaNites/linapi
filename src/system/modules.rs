@@ -155,15 +155,18 @@ impl LoadedModule {
     /// - If any expected module attribute was invalid
     pub fn refresh(&mut self) -> Result<()> {
         let mut map = HashMap::new();
-        for entry in fs::read_dir(self.path.join("parameters"))? {
-            let entry: DirEntry = entry?;
-            map.insert(
-                entry
-                    .file_name()
-                    .into_string()
-                    .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?,
-                fs::read(entry.path())?,
-            );
+        let par = self.path.join("parameters");
+        if par.exists() {
+            for entry in fs::read_dir(par)? {
+                let entry: DirEntry = entry?;
+                map.insert(
+                    entry
+                        .file_name()
+                        .into_string()
+                        .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?,
+                    fs::read(entry.path()).unwrap_or_default(),
+                );
+            }
         }
         self.parameters = map;
         self.ref_count = fs::read_to_string(self.path.join("refcnt"))
@@ -389,7 +392,9 @@ impl LoadedModule {
             size: 0,
             holders: Vec::new(),
         };
-        s.refresh()?;
+        if let Type::Dynamic = s.module_type {
+            s.refresh()?;
+        }
         Ok(s)
     }
 }
