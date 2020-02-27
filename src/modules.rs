@@ -399,6 +399,45 @@ impl LoadedModule {
         }
         Ok(s)
     }
+
+    fn from_dir_hack(path: &Path) -> Result<Self> {
+        let module_type = if path.join("coresize").exists() {
+            Type::Dynamic
+        } else {
+            Type::BuiltIn
+        };
+        let mut s = Self {
+            name: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.trim().to_owned())
+                .ok_or_else(|| ModuleError::InvalidModule(NAME.into()))?,
+            module_type,
+            path: path.into(),
+            parameters: HashMap::new(),
+            ref_count: None,
+            taint: None,
+            status: None,
+            size: 0,
+            holders: Vec::new(),
+        };
+        Ok(s)
+    }
+
+    pub fn linux_modules_hack() -> Result<Vec<Self>> {
+        let dir = Path::new(SYSFS_PATH).join("module");
+        let mut mods = Vec::new();
+        //
+        for module in fs::read_dir(dir)? {
+            let module: DirEntry = module?;
+            let m = Self::from_dir(&module.path())?;
+            if let Type::BuiltIn = m.module_type() {
+                continue;
+            }
+            mods.push(m);
+        }
+        Ok(mods)
+    }
 }
 
 impl UEvent for LoadedModule {
