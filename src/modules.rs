@@ -394,7 +394,9 @@ impl LoadedModule {
             size: 0,
             holders: Vec::new(),
         };
-        s.refresh()?;
+        if let Type::Dynamic = s.module_type {
+            s.refresh()?;
+        }
         Ok(s)
     }
 }
