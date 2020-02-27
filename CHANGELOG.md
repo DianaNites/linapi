@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- `LoadedModule::get_loaded` failed when encountering built-in modules,
+  or modules with parameters that require root to read.
+
 ## [0.4.2] - 2020-02-19
 
 ### Changed
