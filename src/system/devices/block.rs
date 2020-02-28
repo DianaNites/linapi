@@ -171,6 +171,17 @@ impl Partition {
             .map(|s| s.trim().parse::<u64>().unwrap() * 512)
             .unwrap()
     }
+
+    /// Partition number
+    ///
+    /// # Note
+    ///
+    /// This uses the undocumented sysfs `partition` file.
+    pub fn number(&self) -> u64 {
+        fs::read_to_string(self.device_path().join("partition"))
+            .map(|s| s.trim().parse::<u64>().unwrap())
+            .unwrap()
+    }
 }
 
 /// Represents a Block Device
