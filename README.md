@@ -26,7 +26,7 @@ So this crate does the work of handling it for you!
 
 ```toml
 [dependencies]
-linapi = "0.4.2"
+linapi = "0.4.3"
 ```
 
 ### Dependencies
