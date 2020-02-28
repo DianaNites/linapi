@@ -109,6 +109,7 @@ pub struct Power {
     pub(crate) wakeup: Option<Wakeup>,
 }
 
+// Public
 impl Power {
     /// Wakeup information.
     ///
@@ -144,6 +145,19 @@ impl Power {
     /// This defaults to `false` for most devices.
     pub fn async_(&self) -> bool {
         self.async_
+    }
+}
+
+// Private
+impl Power {
+    fn new(path: &Path) -> Result<Self> {
+        Ok(Power {
+            control: util::read_power_control(path)?,
+            autosuspend_delay: util::read_power_autosuspend_delay(path)?,
+            status: util::read_power_status(path)?,
+            async_: util::read_power_async(path)?,
+            wakeup: util::read_power_wakeup(path)?,
+        })
     }
 }
 
@@ -250,13 +264,7 @@ impl Device for RawDevice {
     fn refresh(&mut self) -> Result<()> {
         self.subsystem = Some(util::read_subsystem(&self.path)?);
         self.driver = util::read_driver(&self.path)?;
-        self.power = Some(Power {
-            control: util::read_power_control(&self.path)?,
-            autosuspend_delay: util::read_power_autosuspend_delay(&self.path)?,
-            status: util::read_power_status(&self.path)?,
-            async_: util::read_power_async(&self.path)?,
-            wakeup: util::read_power_wakeup(&self.path)?,
-        });
+        self.power = Some(Power::new(&self.path)?);
         Ok(())
     }
 
