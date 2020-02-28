@@ -187,7 +187,17 @@ pub struct BlockDevice {
 }
 
 impl BlockDevice {
+    /// Create a Block Device from a [`RawDevice`].
+    ///
+    /// # Panics
+    ///
+    /// - If `dev` is not a whole block device.
     pub fn from_device(dev: RawDevice) -> Self {
+        assert_eq!(dev.subsystem(), "block", "{:?} was not a Block device", dev);
+        assert!(
+            !dev.device_path().join("partition").exists(),
+            "{:?} was a partition, not a Block device"
+        );
         Self {
             dev,
             major: 0,
