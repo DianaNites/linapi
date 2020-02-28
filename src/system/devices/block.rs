@@ -73,14 +73,14 @@ pub trait Block: Device {
     /// # Note
     ///
     /// This interface uses the `dev` file, which is undocumented.
-    fn major(&self) -> u32;
+    fn major(&self) -> u64;
 
     /// Minor Device Number
     ///
     /// # Note
     ///
     /// This interface uses the `dev` file, which is undocumented.
-    fn minor(&self) -> u32;
+    fn minor(&self) -> u64;
 
     /// Device capabilities. See [`BlockCap`] for details.
     ///
@@ -188,8 +188,8 @@ impl Partition {
 #[derive(Debug)]
 pub struct BlockDevice {
     dev: RawDevice,
-    major: u32,
-    minor: u32,
+    major: u64,
+    minor: u64,
     capability: BlockCap,
     size: u64,
     alignment_offset: u64,
@@ -313,11 +313,11 @@ impl Device for BlockDevice {
 }
 
 impl Block for BlockDevice {
-    fn major(&self) -> u32 {
+    fn major(&self) -> u64 {
         self.major
     }
 
-    fn minor(&self) -> u32 {
+    fn minor(&self) -> u64 {
         self.minor
     }
 
