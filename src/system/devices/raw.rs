@@ -4,7 +4,7 @@
 //! so you probably don't want to use this module directly.
 use crate::{error::DeviceError, util, util::SYSFS_PATH};
 use std::{
-    fs::{read_dir, DirEntry},
+    fs::DirEntry,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -212,12 +212,23 @@ impl RawDevice {
         let sysfs = Path::new(SYSFS_PATH);
         let mut devices = Vec::new();
         //
-        let path = sysfs.join("subsystem").join(subsystem).join("devices");
-        if path.exists() {
-            for dev in read_dir(path).unwrap() {
-                let dev: DirEntry = dev.unwrap();
+        let mut paths = vec![sysfs.join("subsystem").join(subsystem).join("devices")];
+        if !paths[0].exists() {
+            paths = vec![
+                sysfs.join("class").join(subsystem),
+                // `/sys/bus/<subsystem>` is laid out differently from
+                // `/sys/class/<subsystem>`
+                sysfs.join("bus").join(subsystem).join("devices"),
+            ];
+        }
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+            for dev in path.read_dir()? {
+                let dev: DirEntry = dev?;
                 let mut s = Self {
-                    path: dev.path().canonicalize().unwrap(),
+                    path: dev.path().canonicalize()?,
                     subsystem: None,
                     driver: None,
                     name: None,
@@ -225,30 +236,6 @@ impl RawDevice {
                 };
                 s.refresh()?;
                 devices.push(s);
-            }
-        } else {
-            let paths = &[
-                sysfs.join("class").join(subsystem),
-                // `/sys/bus/<subsystem>` is laid out differently from
-                // `/sys/class/<subsystem>`
-                sysfs.join("bus").join(subsystem).join("devices"),
-            ];
-            for path in paths {
-                let path: &Path = path;
-                if path.exists() {
-                    for dev in read_dir(path).unwrap() {
-                        let dev: DirEntry = dev.unwrap();
-                        let mut s = Self {
-                            path: dev.path().canonicalize().unwrap(),
-                            subsystem: None,
-                            driver: None,
-                            name: None,
-                            power: None,
-                        };
-                        s.refresh()?;
-                        devices.push(s);
-                    }
-                }
             }
         }
         Ok(devices)
