@@ -2,11 +2,14 @@
 use crate::{
     error::DeviceError,
     system::devices::raw::{Device, Power, RawDevice, Result},
+    util::DEV_PATH,
 };
 use bitflags::bitflags;
+use nix::sys::stat::{major, minor};
 use std::{
     fs,
     fs::{read_dir, DirEntry},
+    os::{linux::fs::MetadataExt, unix::fs::FileTypeExt},
     path::{Path, PathBuf},
 };
 
@@ -233,6 +236,30 @@ impl BlockDevice {
             .filter(|d| !d.device_path().join("partition").exists())
             .map(BlockDevice::from_device)
             .collect())
+    }
+
+    /// Finds the device special file corresponding to this Device
+    /// and opens it, if available.
+    ///
+    /// The file is opened for both reading and writing.
+    pub fn open(&self) -> Result<Option<fs::File>> {
+        for dev in fs::read_dir(DEV_PATH)? {
+            let dev: DirEntry = dev?;
+            if !dev.file_type()?.is_block_device() {
+                continue;
+            }
+            let meta = dev.metadata()?;
+            let dev_id = meta.st_dev();
+            if (self.major, self.minor) == (major(dev_id), minor(dev_id)) {
+                return Ok(Some(
+                    fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .open(dev.path())?,
+                ));
+            }
+        }
+        Ok(None)
     }
 
     // TODO: Block Device ioctls

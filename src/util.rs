@@ -18,6 +18,9 @@ pub const SYSFS_PATH: &str = "/sys";
 /// Kernel Module location. Same reasons as [`SYSFS_PATH`].
 pub const MODULE_PATH: &str = "/lib/modules";
 
+/// Device file location. Same reasons as [`SYSFS_PATH`].
+pub const DEV_PATH: &str = "/dev";
+
 /// Read a uevent file
 ///
 /// # Arguments
