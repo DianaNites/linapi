@@ -1,9 +1,6 @@
 //! Utility functions
-use crate::system::{
-    devices::raw::{Result as DeviceResult, Wakeup},
-    UEventAction,
-};
-use std::{collections::HashMap, error::Error, fs, io::prelude::*, path::Path, time::Duration};
+use crate::system::UEventAction;
+use std::{collections::HashMap, fs, io::prelude::*, path::Path};
 
 /// Technically Linux requires sysfs to be at `/sys`, calling it a system
 /// configuration error otherwise.
@@ -66,40 +63,4 @@ pub fn write_uevent(
     //
     let mut f = fs::OpenOptions::new().write(true).open(path).unwrap();
     f.write_all(data.trim().as_bytes()).unwrap();
-}
-
-#[allow(dead_code)]
-pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration>> {
-    Ok(fs::read_to_string(path.join("power/autosuspend_delay_ms"))
-        .map(|s| s.trim().parse())?
-        .map(Duration::from_millis)
-        .ok())
-}
-
-#[allow(dead_code)]
-pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
-    fs::read_to_string(path.join("power/async")).map(|s| match s.trim() {
-        "enabled" => Ok(true),
-        "disabled" => Ok(false),
-        _ => Err(Box::<dyn Error>::from("")),
-    })?
-}
-
-#[allow(dead_code)]
-pub fn read_power_wakeup(path: &Path) -> DeviceResult<Option<Wakeup>> {
-    Ok(Some(Wakeup {
-        can_wakeup: fs::read_to_string(path.join("power/wakeup")).map(|s| match s.trim() {
-            "enabled" => Ok(true),
-            "disabled" => Ok(false),
-            _ => Err(Box::<dyn Error>::from("")),
-        })??,
-        count: fs::read_to_string(path.join("power/wakeup_count"))?
-            .trim()
-            .parse()
-            .map_err(|_| Box::<dyn Error>::from(""))?,
-        count_active: fs::read_to_string(path.join("power/wakeup_active_count"))?
-            .trim()
-            .parse()
-            .map_err(|_| Box::<dyn Error>::from(""))?,
-    }))
 }

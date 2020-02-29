@@ -10,6 +10,7 @@ use std::{
     io::prelude::*,
     os::{linux::fs::MetadataExt, unix::fs::FileTypeExt},
     path::{Path, PathBuf},
+    time::Duration,
 };
 use thiserror::Error;
 
@@ -414,6 +415,62 @@ impl Power<'_> {
             _ => Err(Error::Invalid),
         }
     }
+
+    /// Current auto-suspend delay, if supported.
+    pub fn autosuspend_delay(&self) -> Result<Option<Duration>> {
+        let mut f = fs::File::open(self.path.join("power/autosuspend_delay_ms"))?;
+        let mut s = String::with_capacity(5);
+        let f = f.read_to_string(&mut s);
+        if let nix::Error::Sys(nix::errno::Errno::EIO) = nix::Error::last() {
+            return Ok(None);
+        }
+        f?;
+        Ok(Some(Duration::from_millis(
+            s.trim().parse().map_err(|_| Error::Invalid)?,
+        )))
+    }
+
+    /// Set the auto-suspend delay, if supported.
+    ///
+    /// If `delay` is larger than 1 second, it will be rounded to the nearest
+    /// second by the kernel.
+    pub fn set_autosuspend_delay(&mut self, delay: Duration) -> Result<Option<()>> {
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .open(self.path.join("power/autosuspend_delay_ms"))?;
+        let f = write!(f, "{}", delay.as_millis());
+        if let nix::Error::Sys(nix::errno::Errno::EIO) = nix::Error::last() {
+            return Ok(None);
+        }
+        f?;
+        Ok(Some(()))
+    }
+
+    /// Whether the device is suspended/resumed asynchronously, during
+    /// system-wide power transitions.
+    ///
+    /// This defaults to `false` for most devices.
+    pub fn async_(&self) -> Result<bool> {
+        match fs::read_to_string(self.path.join("power/async"))?.trim() {
+            "enabled" => Ok(true),
+            "disabled" => Ok(false),
+            _ => Err(Error::Invalid),
+        }
+    }
+
+    /// Wakeup information.
+    ///
+    /// If this device is capable of waking the system up from sleep states,
+    /// [`Some`] is returned.
+    ///
+    /// If the Device does not support this, [`None`] is returned.
+    pub fn wakeup(&self) -> Option<Wakeup> {
+        let path = self.path.join("power/wakeup");
+        if !path.exists() {
+            return None;
+        }
+        Some(Wakeup::new(self.path))
+    }
 }
 
 // Private
@@ -422,3 +479,132 @@ impl<'a> Power<'a> {
         Self { path }
     }
 }
+
+#[derive(Debug)]
+pub struct Wakeup<'a> {
+    path: &'a Path,
+}
+
+// Public
+impl Wakeup<'_> {
+    /// Whether the device is allowed to issue wakeup events.
+    pub fn enabled(&self) -> Result<bool> {
+        match fs::read_to_string(self.path.join("power/wakeup"))?.trim() {
+            "enabled" => Ok(true),
+            "disabled" => Ok(false),
+            _ => Err(Error::Invalid),
+        }
+    }
+
+    /// Set whether the device can wake the system up.
+    pub fn set_enabled(&mut self, enabled: bool) -> Result<()> {
+        if enabled == self.enabled()? {
+            return Ok(());
+        }
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .open(self.path.join("power/wakeup"))?;
+        if enabled {
+            write!(&mut f, "enabled")?;
+        } else {
+            write!(&mut f, "disabled")?;
+        };
+        Ok(())
+    }
+}
+
+// Private
+impl<'a> Wakeup<'a> {
+    fn new(path: &'a Path) -> Self {
+        Self { path }
+    }
+}
+
+/// Helper for lots of repetitious wakeup functions.
+macro_rules! wakeup_helper {
+    ($(#[$outer:meta])* $name:ident, $file:literal) => {
+        impl Wakeup<'_> {
+            pub fn $name(&self) -> Result<u32> {
+                Ok(
+                    fs::read_to_string(self.path.join(concat!("power/", $file)))?
+                        .trim()
+                        .parse::<u32>()
+                        .map_err(|_| Error::Invalid)?,
+                )
+            }
+        }
+    };
+}
+
+/// Helper for lots of repetitious wakeup functions.
+macro_rules! wakeup_helper_d {
+    (   $(#[$outer:meta])*
+        $name:ident, $file:literal) => {
+        impl Wakeup<'_> {
+            pub fn $name(&self) -> Result<Duration> {
+                Ok(Duration::from_millis(
+                    fs::read_to_string(self.path.join(concat!("power/", $file)))?
+                        .trim()
+                        .parse::<u64>()
+                        .map_err(|_| Error::Invalid)?,
+                ))
+            }
+        }
+    };
+}
+
+wakeup_helper!(
+    /// How many times this device has signaled a wakeup event.
+    count,
+    "wakeup_count"
+);
+
+wakeup_helper!(
+    /// How many times this device has completed a wakeup event.
+    count_active,
+    "wakeup_active_count"
+);
+
+wakeup_helper!(
+    /// How many times this Device has aborted a sleep state transition.
+    count_abort,
+    "wakeup_abort_count"
+);
+
+wakeup_helper!(
+    /// How many times a wakeup event timed out.
+    count_expired,
+    "wakeup_expire_count"
+);
+
+wakeup_helper!(
+    /// Whether a wakeup event is currently being processed.
+    active,
+    "wakeup_active"
+);
+
+wakeup_helper_d!(
+    /// Total time spent processing wakeup events from this device.
+    total_time,
+    "wakeup_total_time_ms"
+);
+
+wakeup_helper_d!(
+    /// Maximum time spent processing a *single* wakeup event.
+    max_time,
+    "wakeup_max_time_ms"
+);
+
+wakeup_helper_d!(
+    /// Value of the monotonic clock corresponding to the time of
+    /// signaling the last wakeup event associated with this device.
+    last_time,
+    "wakeup_last_time_ms"
+);
+
+wakeup_helper_d!(
+    /// Total time this device has prevented the System from transitioning
+    /// to a sleep state.
+    prevent_sleep_time,
+    "wakeup_prevent_sleep_time_ms"
+);

@@ -4,4 +4,3 @@
 //! most of those interfaces undocumented.
 
 pub mod block;
-pub mod raw;
