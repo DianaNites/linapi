@@ -68,6 +68,7 @@ pub fn write_uevent(
     f.write_all(data.trim().as_bytes()).unwrap();
 }
 
+#[allow(dead_code)]
 pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration>> {
     Ok(fs::read_to_string(path.join("power/autosuspend_delay_ms"))
         .map(|s| s.trim().parse())?
@@ -75,6 +76,7 @@ pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration
         .ok())
 }
 
+#[allow(dead_code)]
 pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
     fs::read_to_string(path.join("power/async")).map(|s| match s.trim() {
         "enabled" => Ok(true),
@@ -83,6 +85,7 @@ pub fn read_power_async(path: &Path) -> DeviceResult<bool> {
     })?
 }
 
+#[allow(dead_code)]
 pub fn read_power_wakeup(path: &Path) -> DeviceResult<Option<Wakeup>> {
     Ok(Some(Wakeup {
         can_wakeup: fs::read_to_string(path.join("power/wakeup")).map(|s| match s.trim() {
