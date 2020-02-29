@@ -703,8 +703,8 @@ impl ModuleFile {
     /// Decompresses a kernel module
     ///
     /// Returns `data` unchanged if not compressed.
-    #[cfg(any(feature = "xz", feature = "gz"))]
     fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+        #[cfg(any(feature = "xz", feature = "gz"))]
         let mut v = Vec::new();
         let ext = self
             .path
@@ -729,18 +729,6 @@ impl ModuleFile {
             "ko" => Ok(data),
             _ => Err(ModuleError::InvalidModule(COMPRESSION.into())),
         }
-    }
-
-    #[cfg(not(any(feature = "xz", feature = "gz")))]
-    fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
-        let ext = self
-            .path
-            .extension()
-            .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
-        if ext != "ko" {
-            return Err(ModuleError::InvalidModule(COMPRESSION.into()));
-        }
-        Ok(data)
     }
 }
 
