@@ -345,6 +345,16 @@ impl Block {
         }
         Ok(())
     }
+
+    /// Get device model, if it exists.
+    pub fn model(&self) -> Result<Option<String>> {
+        // Unwraps should be okay, always a parent.
+        let path = self.path.parent().unwrap().parent().unwrap().join("model");
+        if !path.exists() {
+            return Ok(None);
+        }
+        Ok(Some(fs::read_to_string(path)?))
+    }
 }
 
 // Private
