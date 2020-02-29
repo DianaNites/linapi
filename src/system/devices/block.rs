@@ -316,6 +316,31 @@ impl Partition {
     pub fn size(&self) -> Result<u64> {
         dev_size(&self.path)
     }
+
+    /// Kernel name for the partition.
+    ///
+    /// This does not have to match whats in `/dev`
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Canonical path to the partition.
+    ///
+    /// You normally shouldn't need this, but it could be useful if
+    /// you want to manually access information not exposed by this crate.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Partition number
+    pub fn number(&self) -> Result<u64> {
+        // Note that this file is undocumented, but seems to contain the partition
+        // number.
+        fs::read_to_string(self.path.join("partition"))?
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| Error::Invalid)
+    }
 }
 
 // Private
