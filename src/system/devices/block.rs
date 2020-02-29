@@ -186,6 +186,13 @@ impl Block {
         &self.path
     }
 
+    /// Kernel name for this device.
+    ///
+    /// This does not have to match whats in `/dev`
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Get this devices partitions, if any.
     ///
     /// # Errors
