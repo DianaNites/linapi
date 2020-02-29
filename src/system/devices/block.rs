@@ -480,6 +480,7 @@ impl<'a> Power<'a> {
     }
 }
 
+/// Device wakeup information
 #[derive(Debug)]
 pub struct Wakeup<'a> {
     path: &'a Path,
