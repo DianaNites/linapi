@@ -587,6 +587,7 @@ impl ModuleFile {
     /// This is a temporary API, as `rust-openssl` does not expose the APIs
     /// required for properly reading module signatures.
     // FIXME: rust-openssl does not expose the APIs we need, so this isn't possible.
+    // When/if they do, see `module_signature.h` for details on structure.
     pub fn has_signature(&self) -> bool {
         self.signature
     }
@@ -730,38 +731,6 @@ impl ModuleFile {
             _ => Err(ModuleError::InvalidModule(COMPRESSION.into())),
         }
     }
-}
-
-/// Information on the signature added to the end of the module
-///
-/// See `linux/include/linux/module_signature.h` for some details.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-struct RawModSig {
-    /// Public-key crypto algorithm
-    algorithm: u8,
-
-    // Digest hash
-    hash: u8,
-
-    // Key type
-    id_type: u8,
-
-    // Length of signer name
-    signer_length: u8,
-
-    // Length of key
-    key_id_length: u8,
-
-    _pad: [u8; 3],
-
-    // Length of signature IN BIG ENDIAN
-    signature_length: u32,
-}
-
-#[derive(Debug)]
-struct ModSig {
-    signer: String,
 }
 
 #[derive(Debug, Clone)]
