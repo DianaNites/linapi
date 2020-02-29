@@ -5,9 +5,9 @@
 //! Print all currently loaded system modules
 //!
 //! ```rust
-//! # use linapi::modules::*;
+//! # use linapi::system::modules::*;
 //!
-//! let mods = LoadedModule::from_loaded();
+//! let mods = LoadedModule::get_loaded().unwrap();
 //!
 //! for m in mods {
 //!     println!("Module: {}", m.name());
@@ -17,10 +17,10 @@
 //! Load a module
 //!
 //! ```rust,no_run
-//! # use linapi::modules::*;
+//! # use linapi::system::modules::*;
 //!
-//! let m = ModuleFile::from_name("MyModule");
-//! let loaded = m.load("my_param=1");
+//! let m = ModuleFile::from_name("MyModule").unwrap();
+//! let loaded = m.load("my_param=1").unwrap();
 //! println!("Loaded module {}. my_param={}", loaded.name(), std::str::from_utf8(&loaded.parameters()["my_param"]).unwrap());
 //! ```
 //!
