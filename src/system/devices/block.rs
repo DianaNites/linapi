@@ -94,20 +94,22 @@ bitflags! {
     ///
     /// [1]: https://www.kernel.org/doc/html/latest/block/capability.html
     pub struct BlockCap: u32 {
-        /// Unknown
+        /// Set for removable media with permanent block devices
+        ///
+        /// Unset for removable block devices with permanent media
         const REMOVABLE = 1;
 
         /// Block Device supports Asynchronous Notification of media change events.
         /// These events will be broadcast to user space via kernel uevent.
         const MEDIA_CHANGE_NOTIFY = 4;
 
-        /// Unknown
+        /// CD-like
         const CD = 8;
 
-        /// Unknown
+        /// Alive, online, active.
         const UP = 16;
 
-        /// Unknown
+        /// Doesn't appear in `/proc/partitions`
         const SUPPRESS_PARTITION_INFO = 32;
 
         /// Unknown
@@ -285,7 +287,7 @@ impl Block {
 }
 
 /// A partition
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Partition {
     /// Kernel name
     name: String,
