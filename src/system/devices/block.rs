@@ -349,6 +349,9 @@ impl Block {
     /// Get device model, if it exists.
     pub fn model(&self) -> Result<Option<String>> {
         // Unwraps should be okay, always a parent.
+        // Note that this file is mostly undocumented, at this location,
+        // but see [here][1] for more details
+        // [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-pci-devices-cciss
         let path = self.path.parent().unwrap().parent().unwrap().join("model");
         if !path.exists() {
             return Ok(None);
