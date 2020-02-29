@@ -210,7 +210,8 @@ impl BlockDevice {
         assert_eq!(dev.subsystem(), "block", "{:?} was not a Block device", dev);
         assert!(
             !dev.device_path().join("partition").exists(),
-            "{:?} was a partition, not a Block device"
+            "{:?} was a partition, not a Block device",
+            dev
         );
         Self {
             dev,

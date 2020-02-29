@@ -98,7 +98,7 @@ pub fn read_power_control(path: &Path) -> DeviceResult<Control> {
 pub fn read_power_autosuspend_delay(path: &Path) -> DeviceResult<Option<Duration>> {
     Ok(fs::read_to_string(path.join("power/autosuspend_delay_ms"))
         .map(|s| s.trim().parse())?
-        .map(|s| Duration::from_millis(s))
+        .map(Duration::from_millis)
         .ok())
 }
 
