@@ -1,5 +1,8 @@
 //! Interfaces common to Block devices
-use crate::util::{DEV_PATH, SYSFS_PATH};
+use crate::{
+    raw::ioctl::block::{add_partition, remove_partition},
+    util::{DEV_PATH, SYSFS_PATH},
+};
 use bitflags::bitflags;
 use displaydoc::Display;
 use nix::sys::stat;
@@ -8,6 +11,7 @@ use std::{
     fs::DirEntry,
     io,
     io::prelude::*,
+    ops::Range,
     os::{linux::fs::MetadataExt, unix::fs::FileTypeExt},
     path::{Path, PathBuf},
     time::Duration,
@@ -267,6 +271,79 @@ impl Block {
     /// See [`Power`] for details
     pub fn power(&self) -> Power {
         Power::new(&self.path)
+    }
+
+    /// Tell linux that partition `num` exists in the range `start_end`.
+    ///
+    /// `start_end` is a *byte* range within the whole device.
+    /// This range is NOT inclusive of `end`.
+    ///
+    /// This does NOT modify partitions or anything on disk, only the kernels
+    /// view of the device.
+    ///
+    /// This can be useful in cases where the kernel doesn't support your
+    /// partition table, you can read it yourself and tell it.
+    ///
+    /// # Examples
+    ///
+    /// Add a partition
+    ///
+    /// ```rust,no_run
+    /// # use linapi::system::devices::block::Block;
+    /// let mut block = Block::get_connected().unwrap().remove(0);
+    /// // Tell Linux there is one partition, starting at (1024 * 512) bytes
+    /// // and covering the whole device.
+    /// block.add_partition(0, 1024*512..block.size().unwrap());
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// - If the ioctl does.
+    ///
+    /// # Implementation
+    ///
+    /// This uses the ioctls from `include/linux/blkpg.h`.
+    pub fn add_partition(&mut self, num: u64, start_end: Range<u64>) -> Result<()> {
+        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        // TODO: Better errors, rewrite, label.
+        add_partition(&f, num as i32, start_end.start as i64, start_end.end as i64)
+            .map_err(|_| Error::Invalid)?;
+        Ok(())
+    }
+
+    /// Tell Linux to forget about partition `num`.
+    ///
+    /// # Examples
+    ///
+    /// Remove a partition
+    ///
+    /// ```rust,no_run
+    /// # use linapi::system::devices::block::Block;
+    /// let mut block = Block::get_connected().unwrap().remove(0);
+    /// let part = block.partitions().unwrap().remove(0);
+    /// block.remove_partition(part.number().unwrap());
+    /// ```
+    pub fn remove_partition(&mut self, num: u64) -> Result<()> {
+        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        // TODO: Better errors, rewrite.
+        remove_partition(&f, num as i32).map_err(|_| Error::Invalid)?;
+        Ok(())
+    }
+
+    /// Convenience function for looping through [`Block::partitions`] yourself.
+    ///
+    /// # Implementation
+    ///
+    /// For now this is slightly more efficient than doing it manually,
+    /// opening the device only once instead of for each partition.
+    pub fn remove_existing_partitions(&mut self) -> Result<()> {
+        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        let parts = self.partitions()?;
+        for part in parts {
+            // TODO: Better errors, rewrite.
+            remove_partition(&f, part.number()? as i32).map_err(|_| Error::Invalid)?;
+        }
+        Ok(())
     }
 }
 
