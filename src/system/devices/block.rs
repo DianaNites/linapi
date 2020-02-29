@@ -7,6 +7,7 @@ use std::{
     fs,
     fs::DirEntry,
     io,
+    io::prelude::*,
     os::{linux::fs::MetadataExt, unix::fs::FileTypeExt},
     path::{Path, PathBuf},
 };
@@ -246,6 +247,13 @@ impl Block {
             )
         })
     }
+
+    /// Get device power information
+    ///
+    /// See [`Power`] for details
+    pub fn power(&self) -> Power {
+        Power::new(&self.path)
+    }
 }
 
 // Private
@@ -310,5 +318,94 @@ impl Partition {
             major,
             minor,
         })
+    }
+}
+
+/// See [`Power`] for details
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Status {
+    Suspended,
+    Suspending,
+    Resuming,
+    Active,
+    FatalError,
+    Unsupported,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Control {
+    /// Device power is automatically managed by the system, and it may be
+    /// automatically suspended
+    Auto,
+
+    /// Device power is *not* automatically managed by the system, auto suspend
+    /// is not allowed, and it's woken up if it was suspended.
+    ///
+    /// In short, the device will remain "on" and fully powered.
+    ///
+    /// This does not prevent system suspends.
+    On,
+}
+
+/// Device power information.
+///
+/// See the [kernel docs][1] for details
+///
+/// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
+#[derive(Debug, Copy, Clone)]
+pub struct Power<'a> {
+    path: &'a Path,
+}
+
+// Public
+impl Power<'_> {
+    /// Get current run-time power management setting
+    ///
+    /// See [`Control`] for details
+    pub fn control(&self) -> Result<Control> {
+        match fs::read_to_string(self.path.join("power/control"))?.trim() {
+            "auto" => Ok(Control::Auto),
+            "on" => Ok(Control::On),
+            _ => Err(Error::Invalid),
+        }
+    }
+
+    /// Set the current run-time power management setting
+    ///
+    /// See [`Control`] for details
+    pub fn set_control(&mut self, control: Control) -> Result<()> {
+        if self.control()? == control {
+            return Ok(());
+        }
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .open(self.path.join("power/control"))?;
+        match control {
+            Control::Auto => file.write_all(b"auto")?,
+            Control::On => file.write_all(b"on")?,
+        };
+        Ok(())
+    }
+
+    /// Current runtime PM status
+    ///
+    /// See [`Status`] for details
+    pub fn status(&self) -> Result<Status> {
+        match fs::read_to_string(self.path.join("power/runtime_status"))?.trim() {
+            "suspended" => Ok(Status::Suspended),
+            "suspending" => Ok(Status::Suspending),
+            "resuming" => Ok(Status::Resuming),
+            "active" => Ok(Status::Active),
+            "error" => Ok(Status::FatalError),
+            "unsupported" => Ok(Status::Unsupported),
+            _ => Err(Error::Invalid),
+        }
+    }
+}
+
+// Private
+impl<'a> Power<'a> {
+    fn new(path: &'a Path) -> Self {
+        Self { path }
     }
 }

@@ -2,35 +2,10 @@
 //!
 //! Not much can be done without knowing what kind of device it is,
 //! so you probably don't want to use this module directly.
-use crate::{error::DeviceError, util};
+use crate::util;
 use std::{path::Path, time::Duration};
 
-pub type Result<T, E = DeviceError> = std::result::Result<T, E>;
-
-#[derive(Debug, Copy, Clone)]
-pub enum Control {
-    /// Device power is automatically managed by the system, and it may be
-    /// automatically suspended
-    Auto,
-
-    /// Device power is *not* automatically managed by the system, auto suspend
-    /// is not allowed, and it's woken up if it was suspended.
-    ///
-    /// In short, the device will remain "on" and fully powered.
-    ///
-    /// This does not prevent system suspends.
-    On,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Status {
-    Suspended,
-    Suspending,
-    Resuming,
-    Active,
-    FatalError,
-    Unsupported,
-}
+pub type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 /// Wakeup information for [`DevicePower::wakeup`]
 #[derive(Debug)]
@@ -103,9 +78,7 @@ impl Wakeup {
 /// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
 #[derive(Debug)]
 pub struct Power {
-    control: Control,
     autosuspend_delay: Option<Duration>,
-    status: Status,
     async_: bool,
     wakeup: Option<Wakeup>,
 }
@@ -122,22 +95,12 @@ impl Power {
         self.wakeup.as_ref()
     }
 
-    /// Current Device control setting
-    pub fn control(&self) -> Control {
-        self.control
-    }
-
     /// How long the device will wait after becoming idle before being
     /// suspended.
     ///
     /// [`None`] is returned if this is unsupported.
     pub fn autosuspend_delay(&self) -> Option<Duration> {
         self.autosuspend_delay
-    }
-
-    /// Current Power Management Status of the Device.
-    pub fn status(&self) -> Status {
-        self.status
     }
 
     /// Whether the device is suspended/resumed asynchronously. during
@@ -151,11 +114,9 @@ impl Power {
 
 // Private
 impl Power {
-    fn new(path: &Path) -> Result<Self> {
+    fn _new(path: &Path) -> Result<Self> {
         Ok(Power {
-            control: util::read_power_control(path)?,
             autosuspend_delay: util::read_power_autosuspend_delay(path)?,
-            status: util::read_power_status(path)?,
             async_: util::read_power_async(path)?,
             wakeup: util::read_power_wakeup(path)?,
         })
