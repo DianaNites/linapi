@@ -175,6 +175,10 @@ impl Block {
                 devices.push(Self::new(dev.path().canonicalize()?)?);
             }
         }
+        // FIXME: Better way to prevent duplicates than this?
+        // Ok to only search one of `/sys/class/block` and `/sys/block`?
+        devices.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+        devices.dedup_by(|a, b| a.name == b.name);
         Ok(devices)
     }
 
