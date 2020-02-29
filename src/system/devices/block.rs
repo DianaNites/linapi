@@ -407,6 +407,17 @@ impl Partition {
         dev_size(&self.path)
     }
 
+    /// Byte offset at which the partition starts
+    pub fn start(&self) -> Result<u64> {
+        // Note that this file is undocumented, but seems to contain the
+        // partition start in units of 512 bytes.
+        fs::read_to_string(self.path.join("start"))?
+            .trim()
+            .parse::<u64>()
+            .map(|i| i * 512)
+            .map_err(|_| Error::Invalid)
+    }
+
     /// Kernel name for the partition.
     ///
     /// This does not have to match whats in `/dev`
