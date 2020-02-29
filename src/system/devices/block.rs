@@ -1,47 +1,115 @@
 //! Interfaces common to Block devices
-use crate::{
-    error::DeviceError,
-    system::devices::raw::{Device, Power, RawDevice, Result},
-    util::DEV_PATH,
-};
+use crate::util::{DEV_PATH, SYSFS_PATH};
 use bitflags::bitflags;
-use nix::sys::stat::{major, minor};
+use displaydoc::Display;
+use nix::sys::stat;
 use std::{
     fs,
-    fs::{read_dir, DirEntry},
+    fs::DirEntry,
+    io,
     os::{linux::fs::MetadataExt, unix::fs::FileTypeExt},
     path::{Path, PathBuf},
 };
+use thiserror::Error;
+
+///
+#[derive(Debug, Display, Error)]
+pub enum Error {
+    /// IO Failed: {0}
+    Io(#[from] io::Error),
+
+    /// The device or attribute was invalid
+    Invalid,
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+/// Parse the undocumented `dev` device attribute.
+///
+/// This seems to be formatted as `major:minor\n`
+///
+/// # Errors
+///
+/// - I/O
+/// - Unexpected format
+fn parse_dev(path: &Path) -> Result<(u64, u64)> {
+    let i = fs::read_to_string(path.join("dev"))?;
+    let mut i = i.trim().split(':');
+    //
+    let major = i.next().ok_or_else(|| Error::Invalid)?;
+    let minor = i.next().ok_or_else(|| Error::Invalid)?;
+    //
+    let major = major.parse::<u64>().map_err(|_| Error::Invalid)?;
+    let minor = minor.parse::<u64>().map_err(|_| Error::Invalid)?;
+    //
+    Ok((major, minor))
+}
+
+/// Search for and open a special file in [`DEV_PATH`] with matching
+/// major/minors
+///
+/// File is opened for both reading and writing.
+///
+/// [`None`] is returned if it doesn't exist.
+fn open_from_major_minor(major: u64, minor: u64) -> Result<Option<fs::File>> {
+    for dev in fs::read_dir(DEV_PATH)? {
+        let dev: DirEntry = dev?;
+        if !dev.file_type()?.is_block_device() {
+            continue;
+        }
+        let meta = dev.metadata()?;
+        let dev_id = meta.st_dev();
+        if (major, minor) == (stat::major(dev_id), stat::minor(dev_id)) {
+            return Ok(Some(
+                fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(dev.path())?,
+            ));
+        }
+    }
+    Ok(None)
+}
+
+fn dev_size(path: &Path) -> Result<u64> {
+    fs::read_to_string(path.join("size"))?
+        .trim()
+        .parse::<u64>()
+        // Per [this][1] forgotten 2015 patch, this is in 512 byte sectors.
+        // [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
+        .map(|b| b * 512)
+        .map_err(|_| Error::Invalid)
+}
 
 bitflags! {
-    /// Flags corresponding to [`BlockDevice::capability`].
+    /// Flags corresponding to [`Block::capability`].
     ///
     /// See the [linux kernel docs][1] for details.
     ///
     /// # Note
     ///
     /// Most of these seem to officially be undocumented.
-    /// They have been documented here on a best-effort basis.
+    /// They will be documented here on a best-effort basis.
     ///
     /// [1]: https://www.kernel.org/doc/html/latest/block/capability.html
     pub struct BlockCap: u32 {
-        /// Device is removable?
+        /// Unknown
         const REMOVABLE = 1;
 
         /// Block Device supports Asynchronous Notification of media change events.
         /// These events will be broadcast to user space via kernel uevent.
         const MEDIA_CHANGE_NOTIFY = 4;
 
-        /// Device is a CD?
+        /// Unknown
         const CD = 8;
 
-        /// Device is currently online?
+        /// Unknown
         const UP = 16;
 
-        /// Partition info suppressed?
+        /// Unknown
         const SUPPRESS_PARTITION_INFO = 32;
 
-        /// Device supports extended partitions? Up to 256 partitions, less otherwise?
+        /// Unknown
         const EXT_DEVT = 64;
 
         /// Unknown
@@ -50,322 +118,197 @@ bitflags! {
         /// Unknown
         const BLOCK_EVENTS_ON_EXCL_WRITE = 256;
 
-        /// Partition scanning disabled?
+        /// Unknown
         const NO_PART_SCAN = 512;
 
-        /// Device hidden?
+        /// Unknown
         const HIDDEN = 1024;
     }
 }
 
-/// A Linux Block Device
-///
-/// # Note
-///
-/// Except where otherwise noted, this interface is based on [this][1] kernel
-/// documentation.
-///
-/// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-block
-///
-/// # Implementation
-///
-/// [`Device::refresh`] should be implemented to refresh this information, too.
-pub trait Block: Device {
-    /// Major Device Number
-    ///
-    /// # Note
-    ///
-    /// This interface uses the `dev` file, which is undocumented.
-    fn major(&self) -> u64;
-
-    /// Minor Device Number
-    ///
-    /// # Note
-    ///
-    /// This interface uses the `dev` file, which is undocumented.
-    fn minor(&self) -> u64;
-
-    /// Device capabilities. See [`BlockCap`] for details.
-    ///
-    /// # Note
-    ///
-    /// You can use [`BlockCap::bits`] to get the raw value and manually test
-    /// flags if need be.
-    ///
-    /// Unknown flags *are* preserved.
-    fn capability(&self) -> BlockCap;
-
-    /// Size of the Block Device, in bytes.
-    ///
-    /// # Note
-    ///
-    /// This interface is undocumented, except in a
-    /// [forgotten patch from 2015][1]. The interface has been stable for nearly
-    /// 20 years, however.
-    ///
-    /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    fn size(&self) -> u64;
-
-    /// How many bytes the beginning of the device is
-    /// offset from the disk's natural alignment.
-    fn alignment_offset(&self) -> u64;
-
-    /// How many bytes the beginning of the device is offset from the disk's
-    /// natural alignment.
-    fn discard_alignment_offset(&self) -> u64;
-
-    /// Partitions this Block Device has
-    fn partitions(&self) -> &Vec<Partition>;
-}
-
-/// A Partition of a Linux Block Device
+/// A Block Device
 #[derive(Debug)]
-pub struct Partition {
-    device_path: PathBuf,
-}
+pub struct Block {
+    /// Kernel name
+    name: String,
 
-impl Partition {
-    pub fn device_path(&self) -> &Path {
-        &self.device_path
-    }
+    /// Canonical, full, path to the device.
+    path: PathBuf,
 
-    /// How many bytes the beginning of the partition is
-    /// offset from the disk's natural alignment.
-    pub fn alignment_offset(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("alignment_offset"))
-            .map(|s| s.trim().parse().unwrap())
-            .unwrap()
-    }
-
-    /// How many bytes the beginning of the partition is offset from the
-    /// disk's natural alignment.
-    pub fn discard_alignment_offset(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("discard_alignment"))
-            .map(|s| s.trim().parse().unwrap())
-            .unwrap()
-    }
-
-    /// Size of the Partition, in bytes.
-    ///
-    /// # Note
-    ///
-    /// This interface is undocumented, except in a
-    /// [forgotten patch from 2015][1]. The interface has been stable for nearly
-    /// 20 years, however.
-    ///
-    /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    pub fn size(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("size"))
-            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
-            .unwrap()
-    }
-
-    /// Start position of the Partition on the disk, in bytes.
-    ///
-    /// # Note
-    ///
-    /// This interface is undocumented, except in a
-    /// [forgotten patch from 2015][1]. The interface has been stable for nearly
-    /// 20 years, however.
-    ///
-    /// [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
-    pub fn start(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("start"))
-            .map(|s| s.trim().parse::<u64>().unwrap() * 512)
-            .unwrap()
-    }
-
-    /// Partition number
-    ///
-    /// # Note
-    ///
-    /// This uses the undocumented sysfs `partition` file.
-    pub fn number(&self) -> u64 {
-        fs::read_to_string(self.device_path().join("partition"))
-            .map(|s| s.trim().parse::<u64>().unwrap())
-            .unwrap()
-    }
-}
-
-/// Represents a Block Device
-#[derive(Debug)]
-pub struct BlockDevice {
-    dev: RawDevice,
+    /// Major device number. Read from the undocumented `dev` file.
     major: u64,
+
+    /// Minor device number. Read from the undocumented `dev` file.
     minor: u64,
-    capability: BlockCap,
-    size: u64,
-    alignment_offset: u64,
-    discard_alignment_offset: u64,
-    partitions: Vec<Partition>,
 }
 
-impl BlockDevice {
-    /// Create a Block Device from a [`RawDevice`].
+// Public
+impl Block {
+    /// Get connected Block Devices.
     ///
-    /// # Panics
+    /// For devices with partitions, their partitions are **not** returned by
+    /// this method. You can get partitions using [`Block::partitions`]
     ///
-    /// - If `dev` is not a whole block device.
-    pub fn from_device(dev: RawDevice) -> Self {
-        assert_eq!(dev.subsystem(), "block", "{:?} was not a Block device", dev);
-        assert!(
-            !dev.device_path().join("partition").exists(),
-            "{:?} was a partition, not a Block device",
-            dev
-        );
-        Self {
-            dev,
-            major: 0,
-            minor: 0,
-            capability: BlockCap::empty(),
-            size: 0,
-            alignment_offset: 0,
-            discard_alignment_offset: 0,
-            partitions: Vec::new(),
-        }
-    }
-
-    /// Get connected block devices
+    /// # Errors
     ///
-    /// # Note
-    ///
-    /// This skips partitions, which may appear in the block subsystems.
+    /// - If I/O does
     pub fn get_connected() -> Result<Vec<Self>> {
-        Ok(RawDevice::get_connected("block")?
-            .into_iter()
-            // partition is undocumented.
-            .filter(|d| !d.device_path().join("partition").exists())
-            .map(BlockDevice::from_device)
-            .collect())
+        let sysfs = Path::new(SYSFS_PATH);
+        let mut devices = Vec::new();
+        // Per linux sysfs-rules, if /sys/subsystem exists, class should be ignored.
+        // If it doesn't exist, both places need scanning.
+        let mut paths = vec![sysfs.join("subsystem/block/devices")];
+        if !paths[0].exists() {
+            paths = vec![sysfs.join("class/block"), sysfs.join("block")];
+        }
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+            for dev in path.read_dir()? {
+                let dev: DirEntry = dev?;
+                // Skip partitions. Note that this attribute is undocumented.
+                if dev.path().join("partition").exists() {
+                    continue;
+                }
+                devices.push(Self::new(dev.path().canonicalize()?)?);
+            }
+        }
+        Ok(devices)
     }
 
-    /// Finds the device special file corresponding to this Device
-    /// and opens it, if available.
+    /// Canonical path to the block device.
     ///
-    /// The file is opened for both reading and writing.
-    pub fn open(&self) -> Result<Option<fs::File>> {
-        for dev in fs::read_dir(DEV_PATH)? {
-            let dev: DirEntry = dev?;
-            if !dev.file_type()?.is_block_device() {
-                continue;
-            }
-            let meta = dev.metadata()?;
-            let dev_id = meta.st_dev();
-            if (self.major, self.minor) == (major(dev_id), minor(dev_id)) {
-                return Ok(Some(
-                    fs::OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .open(dev.path())?,
-                ));
-            }
-        }
-        Ok(None)
+    /// You normally shouldn't need this, but it could be useful if
+    /// you want to manually access information not exposed by this crate.
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
-    // TODO: Block Device ioctls
-}
-
-impl Device for BlockDevice {
-    fn refresh(&mut self) -> Result<()> {
-        self.dev.refresh()?;
-        let (major, minor) = {
-            let dev = std::fs::read_to_string(self.device_path().join("dev"))?;
-            let mut dev = dev.trim().split(':');
-            (
-                dev.next()
-                    .and_then(|s| s.parse().ok())
-                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid major"))?,
-                dev.next()
-                    .and_then(|s| s.parse().ok())
-                    .ok_or_else(|| DeviceError::InvalidDevice("Invalid minor"))?,
-            )
-        };
-        self.major = major;
-        self.minor = minor;
-        // Unknown bits are safe, and the kernel may add new flags.
-        self.capability = unsafe {
-            BlockCap::from_bits_unchecked(
-                std::fs::read_to_string(self.device_path().join("capability"))?
-                    .trim()
-                    .parse()
-                    .map_err(|_| DeviceError::InvalidDevice("Invalid capability"))?,
-            )
-        };
-        self.size = std::fs::read_to_string(self.device_path().join("size"))?
-            .trim()
-            .parse()
-            .map_err(|_| DeviceError::InvalidDevice("Invalid size"))?;
-        self.alignment_offset =
-            std::fs::read_to_string(self.device_path().join("alignment_offset"))?
-                .trim()
-                .parse()
-                .map_err(|_| DeviceError::InvalidDevice("Invalid alignment_offset"))?;
-
-        self.discard_alignment_offset =
-            std::fs::read_to_string(self.device_path().join("discard_alignment"))?
-                .trim()
-                .parse()
-                .map_err(|_| DeviceError::InvalidDevice("Invalid discard_alignment"))?;
-
-        self.partitions.clear();
-        for dir in read_dir(self.device_path())? {
+    /// Get this devices partitions, if any.
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn partitions(&self) -> Result<Vec<Partition>> {
+        let mut devices = Vec::new();
+        for dir in fs::read_dir(&self.path)? {
             let dir: DirEntry = dir?;
-            if !dir.path().join("partition").exists() {
+            let path = dir.path();
+            if !dir.file_type()?.is_dir() || !path.join("partition").exists() {
                 continue;
             }
-            self.partitions.push(Partition {
-                device_path: dir.path(),
-            });
+            devices.push(Partition::new(path)?);
         }
-
-        //
-        Ok(())
+        Ok(devices)
     }
 
-    fn device_path(&self) -> &Path {
-        self.dev.device_path()
+    /// Open the device special file in `/dev` associated with this block
+    /// device, if it exists.
+    ///
+    /// The device file is opened for reading and writing
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn open(&self) -> Result<Option<fs::File>> {
+        open_from_major_minor(self.major, self.minor)
     }
 
-    fn subsystem(&self) -> &str {
-        self.dev.subsystem()
-    }
-
-    fn driver(&self) -> Option<&str> {
-        self.dev.driver()
-    }
-
-    fn power(&self) -> &Power {
-        self.dev.power()
-    }
-}
-
-impl Block for BlockDevice {
-    fn major(&self) -> u64 {
+    /// Device major number
+    pub fn major(&self) -> u64 {
         self.major
     }
 
-    fn minor(&self) -> u64 {
+    /// Device minor number
+    pub fn minor(&self) -> u64 {
         self.minor
     }
 
-    fn capability(&self) -> BlockCap {
-        self.capability
+    /// Get the byte size of the device, if possible.
+    pub fn size(&self) -> Result<u64> {
+        dev_size(&self.path)
     }
 
-    fn size(&self) -> u64 {
-        self.size
+    /// Get device capabilities.
+    ///
+    /// Unknown flags *are* preserved
+    ///
+    /// See [`BlockCap`] for more details.
+    pub fn capability(&self) -> Result<BlockCap> {
+        // Unknown bits are safe, and the kernel may add new flags.
+        Ok(unsafe {
+            BlockCap::from_bits_unchecked(
+                std::fs::read_to_string(self.path.join("capability"))?
+                    .trim()
+                    .parse()
+                    .map_err(|_| Error::Invalid)?,
+            )
+        })
+    }
+}
+
+// Private
+impl Block {
+    fn new(path: PathBuf) -> Result<Self> {
+        let (major, minor) = parse_dev(&path)?;
+        Ok(Self {
+            name: path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(Into::into)
+                .unwrap(),
+            path,
+            major,
+            minor,
+        })
+    }
+}
+
+/// A partition
+#[derive(Debug)]
+pub struct Partition {
+    /// Kernel name
+    name: String,
+
+    /// Canonical, full, path to the partition.
+    path: PathBuf,
+
+    /// Major device number. Read from the undocumented `dev` file.
+    major: u64,
+
+    /// Minor device number. Read from the undocumented `dev` file.
+    minor: u64,
+}
+
+// Public
+impl Partition {
+    /// Open the device file for this partition.
+    ///
+    /// See [`Block::open`] for details
+    pub fn open(&self) -> Result<Option<fs::File>> {
+        open_from_major_minor(self.major, self.minor)
     }
 
-    fn alignment_offset(&self) -> u64 {
-        self.alignment_offset
+    /// Get the byte size of the device, if possible.
+    pub fn size(&self) -> Result<u64> {
+        dev_size(&self.path)
     }
+}
 
-    fn discard_alignment_offset(&self) -> u64 {
-        self.discard_alignment_offset
-    }
-
-    fn partitions(&self) -> &Vec<Partition> {
-        &self.partitions
+// Private
+impl Partition {
+    fn new(path: PathBuf) -> Result<Self> {
+        let (major, minor) = parse_dev(&path)?;
+        Ok(Self {
+            name: path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(Into::into)
+                .unwrap(),
+            path,
+            major,
+            minor,
+        })
     }
 }

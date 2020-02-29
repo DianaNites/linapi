@@ -1,8 +1,4 @@
 //! This module provides ways to get information about a running Linux system
-use crate::{
-    system::devices::raw::Device,
-    util::{read_uevent, write_uevent},
-};
 use std::collections::HashMap;
 
 pub mod devices;
@@ -27,18 +23,4 @@ pub trait UEvent {
 
     /// Return the Key=Value pairs in the `uevent` file.
     fn read(&self) -> HashMap<String, String>;
-}
-
-/// All [`Device`]s have a `uevent` file.
-impl<T> UEvent for T
-where
-    T: Device,
-{
-    fn write(&self, action: UEventAction, uuid: Option<String>, args: HashMap<String, String>) {
-        write_uevent(&self.device_path().join("uevent"), action, uuid, args)
-    }
-
-    fn read(&self) -> HashMap<String, String> {
-        read_uevent(&self.device_path().join("uevent"))
-    }
 }

@@ -2,12 +2,8 @@
 //!
 //! Not much can be done without knowing what kind of device it is,
 //! so you probably don't want to use this module directly.
-use crate::{error::DeviceError, util, util::SYSFS_PATH};
-use std::{
-    fs::DirEntry,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use crate::{error::DeviceError, util};
+use std::{path::Path, time::Duration};
 
 pub type Result<T, E = DeviceError> = std::result::Result<T, E>;
 
@@ -100,13 +96,18 @@ impl Wakeup {
     }
 }
 
+/// Device Power Management
+///
+/// See the [kernel docs][1] for details.
+///
+/// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
 #[derive(Debug)]
 pub struct Power {
-    pub(crate) control: Control,
-    pub(crate) autosuspend_delay: Option<Duration>,
-    pub(crate) status: Status,
-    pub(crate) async_: bool,
-    pub(crate) wakeup: Option<Wakeup>,
+    control: Control,
+    autosuspend_delay: Option<Duration>,
+    status: Status,
+    async_: bool,
+    wakeup: Option<Wakeup>,
 }
 
 // Public
@@ -158,127 +159,5 @@ impl Power {
             async_: util::read_power_async(path)?,
             wakeup: util::read_power_wakeup(path)?,
         })
-    }
-}
-
-/// Describes a Linux Device.
-///
-/// This is the most general interface, so you can do the least with it.
-///
-/// This interface is constructed to follow the [sysfs rules][1].
-///
-/// Some basic information about the Device *should* be read on
-/// construction through the [`Device::refresh`] method.
-///
-/// [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
-pub trait Device {
-    /// Refresh information on a Device.
-    ///
-    /// # Note
-    ///
-    /// As this information is from the filesystem, it is not atomic or
-    /// representative of a specific moment in time.
-    /// Linux provides no way to do that.
-    fn refresh(&mut self) -> Result<()>;
-
-    /// The canonical path to the Device.
-    ///
-    /// # Note
-    ///
-    /// This is the absolute canonical filesystem path of the Device, so it
-    /// includes the leading `/sys`
-    fn device_path(&self) -> &Path;
-
-    /// Kernel name of the Device, ie `sda`. Identical to the last element of
-    /// [`Device::device_path`]
-    fn kernel_name(&self) -> &str {
-        // Unwraps should be okay, if not it means `device_path` is invalid.
-        self.device_path().file_stem().unwrap().to_str().unwrap()
-    }
-
-    /// Name of the driver for this Device, or [`None`].
-    fn driver(&self) -> Option<&str>;
-
-    /// Name of the subsystem for this Device.
-    fn subsystem(&self) -> &str;
-
-    /// Device Power Management
-    ///
-    /// See the [kernel docs][1] for details.
-    ///
-    /// [1]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-power
-    fn power(&self) -> &Power;
-}
-
-/// Represents one specific Device
-#[derive(Debug)]
-pub struct RawDevice {
-    path: PathBuf,
-    subsystem: Option<String>,
-    driver: Option<String>,
-    name: Option<String>,
-    power: Option<Power>,
-}
-
-impl RawDevice {
-    /// Get connected devices by their subsystem name
-    pub fn get_connected(subsystem: &str) -> Result<Vec<Self>> {
-        let sysfs = Path::new(SYSFS_PATH);
-        let mut devices = Vec::new();
-        //
-        let mut paths = vec![sysfs.join("subsystem").join(subsystem).join("devices")];
-        if !paths[0].exists() {
-            paths = vec![
-                sysfs.join("class").join(subsystem),
-                // `/sys/bus/<subsystem>` is laid out differently from
-                // `/sys/class/<subsystem>`
-                sysfs.join("bus").join(subsystem).join("devices"),
-            ];
-        }
-        for path in paths {
-            if !path.exists() {
-                continue;
-            }
-            for dev in path.read_dir()? {
-                let dev: DirEntry = dev?;
-                let mut s = Self {
-                    path: dev.path().canonicalize()?,
-                    subsystem: None,
-                    driver: None,
-                    name: None,
-                    power: None,
-                };
-                s.refresh()?;
-                devices.push(s);
-            }
-        }
-        Ok(devices)
-    }
-}
-
-impl Device for RawDevice {
-    fn device_path(&self) -> &Path {
-        &self.path
-    }
-
-    fn refresh(&mut self) -> Result<()> {
-        self.subsystem = Some(util::read_subsystem(&self.path)?);
-        self.driver = util::read_driver(&self.path)?;
-        self.power = Some(Power::new(&self.path)?);
-        Ok(())
-    }
-
-    fn subsystem(&self) -> &str {
-        // Unwrap should be okay, `refresh` sets it.
-        self.subsystem.as_ref().unwrap()
-    }
-
-    fn driver(&self) -> Option<&str> {
-        self.driver.as_deref()
-    }
-
-    fn power(&self) -> &Power {
-        // Should be okay, `refresh` sets it.
-        self.power.as_ref().unwrap()
     }
 }
