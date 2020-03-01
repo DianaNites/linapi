@@ -64,7 +64,7 @@ fn find_from_major_minor(major: u64, minor: u64) -> Result<Option<PathBuf>> {
             continue;
         }
         let meta = dev.metadata()?;
-        let dev_id = meta.st_dev();
+        let dev_id = meta.st_rdev();
         if (major, minor) == (stat::major(dev_id), stat::minor(dev_id)) {
             return Ok(Some(dev.path()));
         }
