@@ -51,13 +51,13 @@ fn parse_dev(path: &Path) -> Result<(u64, u64)> {
     Ok((major, minor))
 }
 
-/// Search for and open a special file in [`DEV_PATH`] with matching
+/// Search for the a device special file in [`DEV_PATH`] with matching
 /// major/minors
 ///
 /// File is opened for both reading and writing.
 ///
 /// [`None`] is returned if it doesn't exist.
-fn open_from_major_minor(major: u64, minor: u64) -> Result<Option<fs::File>> {
+fn find_from_major_minor(major: u64, minor: u64) -> Result<Option<PathBuf>> {
     for dev in fs::read_dir(DEV_PATH)? {
         let dev: DirEntry = dev?;
         if !dev.file_type()?.is_block_device() {
@@ -66,12 +66,7 @@ fn open_from_major_minor(major: u64, minor: u64) -> Result<Option<fs::File>> {
         let meta = dev.metadata()?;
         let dev_id = meta.st_dev();
         if (major, minor) == (stat::major(dev_id), stat::minor(dev_id)) {
-            return Ok(Some(
-                fs::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .open(dev.path())?,
-            ));
+            return Ok(Some(dev.path()));
         }
     }
     Ok(None)
@@ -197,6 +192,11 @@ impl Block {
         &self.path
     }
 
+    /// Path to the device *file*, usually in `/dev`.
+    pub fn dev_path(&self) -> Result<Option<PathBuf>> {
+        find_from_major_minor(self.major, self.minor)
+    }
+
     /// Kernel name for this device.
     ///
     /// This does not have to match whats in `/dev`
@@ -231,7 +231,13 @@ impl Block {
     ///
     /// - If I/O does
     pub fn open(&self) -> Result<Option<fs::File>> {
-        open_from_major_minor(self.major, self.minor)
+        let path = find_from_major_minor(self.major, self.minor)?;
+        match path {
+            Some(path) => Ok(Some(
+                fs::OpenOptions::new().read(true).write(true).open(path)?,
+            )),
+            None => Ok(None),
+        }
     }
 
     /// Device major number
@@ -399,7 +405,13 @@ impl Partition {
     ///
     /// See [`Block::open`] for details
     pub fn open(&self) -> Result<Option<fs::File>> {
-        open_from_major_minor(self.major, self.minor)
+        let path = find_from_major_minor(self.major, self.minor)?;
+        match path {
+            Some(path) => Ok(Some(
+                fs::OpenOptions::new().read(true).write(true).open(path)?,
+            )),
+            None => Ok(None),
+        }
     }
 
     /// Get the byte size of the device, if possible.
@@ -431,6 +443,11 @@ impl Partition {
     /// you want to manually access information not exposed by this crate.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Path to the device *file*, usually in `/dev`.
+    pub fn dev_path(&self) -> Result<Option<PathBuf>> {
+        find_from_major_minor(self.major, self.minor)
     }
 
     /// Partition number
