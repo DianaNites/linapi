@@ -364,6 +364,18 @@ impl Block {
         }
         Ok(Some(fs::read_to_string(path)?))
     }
+
+    /// Device logical block size, the smallest unit the device can address.
+    ///
+    /// This is usually 512
+    pub fn logical_block_size(&self) -> Result<u64> {
+        Ok(
+            fs::read_to_string(self.path.join("queue/logical_block_size"))?
+                .trim()
+                .parse::<u64>()
+                .map_err(|_| Error::Invalid)?,
+        )
+    }
 }
 
 // Private
