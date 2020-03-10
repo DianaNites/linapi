@@ -21,7 +21,7 @@ use thiserror::Error;
 ///
 #[derive(Debug, Display, Error)]
 pub enum Error {
-    /// IO Failed: {0}
+    /// IO Failed
     Io(#[from] io::Error),
 
     /// The device or attribute was invalid
@@ -189,6 +189,7 @@ impl Block {
     /// # Errors
     ///
     /// - If `path` is not a device file
+    /// - If `path` is a partition
     pub fn from_dev(path: &Path) -> Result<Self> {
         let sysfs = Path::new(SYSFS_PATH);
         let meta = path.metadata()?;
@@ -199,6 +200,12 @@ impl Block {
         let (major, minor) = (stat::major(dev_id), stat::minor(dev_id));
         let path = sysfs.join("dev/block").join(format!("{}:{}", major, minor));
         let path = path.canonicalize()?;
+        if path.join("partition").exists() {
+            return Err(Error::Io(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid Data: dev",
+            )));
+        }
         Self::new(path)
     }
 
