@@ -184,6 +184,24 @@ impl Block {
         Ok(devices)
     }
 
+    /// Create from a device file in `/dev`
+    ///
+    /// # Errors
+    ///
+    /// - If `path` is not a device file
+    pub fn from_dev(path: &Path) -> Result<Self> {
+        let sysfs = Path::new(SYSFS_PATH);
+        let meta = path.metadata()?;
+        if !meta.file_type().is_block_device() {
+            return Err(Error::Invalid);
+        }
+        let dev_id = meta.st_rdev();
+        let (major, minor) = (stat::major(dev_id), stat::minor(dev_id));
+        let path = sysfs.join("dev/block").join(format!("{}:{}", major, minor));
+        let path = path.canonicalize()?;
+        Self::new(path)
+    }
+
     /// Canonical path to the block device.
     ///
     /// You normally shouldn't need this, but it could be useful if
