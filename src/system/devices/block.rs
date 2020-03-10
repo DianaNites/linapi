@@ -130,7 +130,7 @@ bitflags! {
 }
 
 /// A Block Device
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     /// Kernel name
     name: String,
