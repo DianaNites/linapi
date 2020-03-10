@@ -6,7 +6,7 @@ use thiserror::Error;
 /// Error type for [`linapi::modules`]
 #[derive(Debug, Display, Error)]
 pub enum ModuleError {
-    /// IO Failed: {0}
+    /// IO Failed
     Io(#[from] io::Error),
 
     /// Couldn't load module {0}: {1}
