@@ -387,7 +387,7 @@ impl Block {
         if !path.exists() {
             return Ok(None);
         }
-        Ok(Some(fs::read_to_string(path)?))
+        Ok(Some(fs::read_to_string(path).map(|s| s.trim().to_owned())?))
     }
 
     /// Device logical block size, the smallest unit the device can address.
