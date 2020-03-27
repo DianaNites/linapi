@@ -598,13 +598,11 @@ impl Power<'_> {
 
     /// Current auto-suspend delay, if supported.
     pub fn autosuspend_delay(&self) -> Result<Option<Duration>> {
-        let mut f = fs::File::open(self.path.join("power/autosuspend_delay_ms"))?;
-        let mut s = String::with_capacity(5);
-        let f = f.read_to_string(&mut s);
-        if let nix::Error::Sys(nix::errno::Errno::EIO) = nix::Error::last() {
+        let f = fs::read_to_string(self.path.join("power/autosuspend_delay_ms"));
+        if let Err(Some(5)) = f.as_ref().map_err(|e| e.raw_os_error()) {
             return Ok(None);
         }
-        f?;
+        let s = f?;
         Ok(Some(Duration::from_millis(
             s.trim().parse().map_err(|_| Error::Invalid)?,
         )))
