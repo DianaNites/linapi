@@ -230,6 +230,8 @@ pub trait FileExt: AsRawFd {
         }
         Ok(())
     }
+
+    // TODO: Dig holes, see `fallocate(1)`.
 }
 
 impl FileExt for File {}
