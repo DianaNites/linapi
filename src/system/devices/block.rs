@@ -24,6 +24,9 @@ pub enum Error {
     /// IO Failed
     Io(#[from] io::Error),
 
+    /// Invalid argument: {0}
+    InvalidArg(&'static str),
+
     /// The device or attribute was invalid
     Invalid,
 }
@@ -157,7 +160,7 @@ impl Block {
     ///
     /// # Errors
     ///
-    /// - If I/O does
+    /// - [`Error::Io`] for I/O errors
     pub fn get_connected() -> Result<Vec<Self>> {
         let sysfs = Path::new(SYSFS_PATH);
         let mut devices = Vec::new();
@@ -191,23 +194,22 @@ impl Block {
     ///
     /// # Errors
     ///
-    /// - If `path` is not a device file
-    /// - If `path` is a partition
+    /// - [`Error::NotFound`] if
+    /// - [`Error::InvalidArg`] if `path` is not a block device
+    /// - [`Error::InvalidArg`] if `path` is a partition
+    /// - [`Error::Io`] for I/O errors
     pub fn from_dev(path: &Path) -> Result<Self> {
         let sysfs = Path::new(SYSFS_PATH);
         let meta = path.metadata()?;
         if !meta.file_type().is_block_device() {
-            return Err(Error::Invalid);
+            return Err(Error::InvalidArg("path"));
         }
         let dev_id = meta.st_rdev();
         let (major, minor) = (stat::major(dev_id), stat::minor(dev_id));
         let path = sysfs.join("dev/block").join(format!("{}:{}", major, minor));
         let path = path.canonicalize()?;
         if path.join("partition").exists() {
-            return Err(Error::Io(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid Data: dev",
-            )));
+            return Err(Error::InvalidArg("path"));
         }
         Self::new(path)
     }
