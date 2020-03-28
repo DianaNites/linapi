@@ -1,10 +1,11 @@
 //! Linux-specific extensions to std types
 use nix::{
     errno::Errno,
-    fcntl::{flock, FlockArg},
+    fcntl::{fallocate, flock, FallocateFlags, FlockArg},
     sys::memfd::{memfd_create, MemFdCreateFlag},
 };
 use std::{
+    convert::TryInto,
     ffi::CString,
     fs::File,
     io,
@@ -168,6 +169,62 @@ pub trait FileExt: AsRawFd {
                 Ok(_) => break,
                 Err(nix::Error::Sys(Errno::EINTR)) => continue,
                 Err(nix::Error::Sys(e @ nix::errno::EWOULDBLOCK)) => return Err(e.into()),
+                Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Allocate space on disk for at least `size` bytes
+    ///
+    /// Unlike [`File::set_len`], which on Linux creates a sparse file
+    /// without reserving disk space,
+    /// this will actually reserve `size` bytes of zeros, without having to
+    /// write them.
+    ///
+    /// Subsequent writes up to `size` bytes are guaranteed not to fail
+    /// because of lack of disk space.
+    ///
+    /// # Implementation
+    ///
+    /// This uses `fallocate(2)`
+    ///
+    /// This will retry as necessary on `EINTR`
+    ///
+    /// # Errors
+    ///
+    /// - If `self` is not opened for writing.
+    /// - If `self` is not a regular file.
+    /// - If I/O does.
+    ///
+    /// # Panics
+    ///
+    /// - If `size` does not fit in an `i64`
+    /// - If `size` is zero
+    fn allocate(&self, size: u64) -> io::Result<()> {
+        assert_ne!(size, 0, "Size cannot be zero");
+        let fd = self.as_raw_fd();
+        loop {
+            let e = fallocate(
+                fd,
+                FallocateFlags::empty(),
+                0,
+                size.try_into().expect("Size was too big"),
+            )
+            .map(|_| ());
+            match e {
+                Ok(_) => break,
+                Err(nix::Error::Sys(Errno::EINTR)) => continue,
+                // Not opened for writing
+                Err(nix::Error::Sys(e @ Errno::EBADF)) => return Err(e.into()),
+                // I/O
+                Err(nix::Error::Sys(e @ Errno::EFBIG)) => return Err(e.into()),
+                Err(nix::Error::Sys(e @ Errno::EIO)) => return Err(e.into()),
+                Err(nix::Error::Sys(e @ Errno::EPERM)) => return Err(e.into()),
+                Err(nix::Error::Sys(e @ Errno::ENOSPC)) => return Err(e.into()),
+                // Not regular file
+                Err(nix::Error::Sys(e @ Errno::ENODEV)) => return Err(e.into()),
+                Err(nix::Error::Sys(e @ Errno::ESPIPE)) => return Err(e.into()),
                 Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
             }
         }
