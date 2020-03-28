@@ -18,7 +18,7 @@ use std::{
 };
 use thiserror::Error;
 
-///
+/// Block Error type
 #[derive(Debug, Display, Error)]
 pub enum Error {
     /// IO Failed
