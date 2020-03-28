@@ -21,6 +21,8 @@ pub trait FileExt {
     /// # Panics
     ///
     /// - if `path` is more than 249 bytes. This is a Linux Kernel limit.
+    /// - The per process/system file limit is reached.
+    /// - Insufficient memory.
     fn create_memory<P: AsRef<Path>>(path: P) -> File {
         let path = path.as_ref();
         let fd = memfd_create(
