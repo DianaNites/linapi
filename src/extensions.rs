@@ -116,6 +116,7 @@ pub trait FileExt: AsRawFd {
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
     fn lock_nonblock(&self, lock: LockType) -> io::Result<()> {
         let fd = self.as_raw_fd();
+        // FIXME: Can the non-blocking variants get interrupted?
         loop {
             let e = lock_impl(fd, lock, true);
             match e {
@@ -160,6 +161,7 @@ pub trait FileExt: AsRawFd {
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
     fn unlock_nonblock(&self) -> io::Result<()> {
         let fd = self.as_raw_fd();
+        // FIXME: Can the non-blocking variants get interrupted?
         loop {
             let e = flock(fd, FlockArg::UnlockNonblock);
             match e {
