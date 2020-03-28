@@ -149,8 +149,11 @@ pub struct Block {
 impl Block {
     /// Get connected Block Devices.
     ///
-    /// For devices with partitions, their partitions are **not** returned by
-    /// this method. You can get partitions using [`Block::partitions`]
+    /// # Note
+    ///
+    /// Partitions are **not** included. Use [`Block::partitions`].
+    ///
+    /// The returned Vec is sorted by kernel name.
     ///
     /// # Errors
     ///
