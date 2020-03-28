@@ -194,7 +194,6 @@ impl Block {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`] if
     /// - [`Error::InvalidArg`] if `path` is not a block device
     /// - [`Error::InvalidArg`] if `path` is a partition
     /// - [`Error::Io`] for I/O errors
