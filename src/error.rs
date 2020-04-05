@@ -3,10 +3,10 @@ use displaydoc::Display;
 use std::io;
 use thiserror::Error;
 
-/// Error type for [`linapi::modules`]
+/// Error type for [`crate::system::modules`]
 #[derive(Debug, Display, Error)]
 pub enum ModuleError {
-    /// IO Failed
+    /// I/O Error
     Io(#[from] io::Error),
 
     /// Couldn't load module {0}: {1}
