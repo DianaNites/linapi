@@ -10,10 +10,104 @@ use std::{
     io,
     os::unix::{
         ffi::OsStringExt,
+        fs::FileTypeExt,
         io::{AsRawFd, FromRawFd, RawFd},
     },
     path::Path,
 };
+
+/// Internal ioctl stuff
+mod _impl {
+    use nix::{
+        ioctl_none,
+        ioctl_write_ptr_bad,
+        libc::{c_char, c_int, c_longlong, c_void},
+    };
+    use std::{convert::TryInto, marker::PhantomData, mem};
+
+    pub const BLOCK_ADD_PART: i32 = 1;
+    pub const BLOCK_DEL_PART: i32 = 2;
+    pub const _BLOCK_RESIZE_PART: i32 = 3;
+
+    #[repr(C)]
+    pub struct BlockPageIoctlArgs<'a> {
+        /// Requested operation
+        op: c_int,
+
+        /// Always zero, kernel doesn't use?
+        flags: c_int,
+
+        /// size_of::<BlockPagePartArgs>().
+        /// Also unused by the kernel, size is hard-coded?
+        data_len: c_int,
+
+        /// [`BlockPagePartArgs`]
+        data: *mut c_void,
+
+        _phantom: PhantomData<&'a mut BlockPagePartArgs>,
+    }
+
+    impl<'a> BlockPageIoctlArgs<'a> {
+        pub fn new(op: i32, data: &'a mut BlockPagePartArgs) -> Self {
+            BlockPageIoctlArgs {
+                op,
+                flags: 0,
+                data_len: mem::size_of::<BlockPagePartArgs>().try_into().unwrap(),
+                data: data as *mut _ as *mut _,
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    #[repr(C)]
+    pub struct BlockPagePartArgs {
+        /// Starting offset, in bytes
+        start: c_longlong,
+
+        /// Length, in bytes.
+        length: c_longlong,
+
+        /// Partition number
+        part_num: c_int,
+
+        /// Unused by the kernel?
+        dev_name: [c_char; 64],
+
+        /// Unused by the kernel?
+        vol_name: [c_char; 64],
+    }
+
+    impl BlockPagePartArgs {
+        pub fn new(part_num: i32, start: i64, end: i64) -> Self {
+            let length = end - start;
+            BlockPagePartArgs {
+                start,
+                length,
+                part_num,
+                dev_name: [0; 64],
+                vol_name: [0; 64],
+            }
+        }
+    }
+
+    ioctl_none! {
+        /// The `BLKRRPART` ioctl, defined in
+        /// <linux/fs.h>
+        block_reread_part,
+        0x12,
+        95
+    }
+
+    ioctl_write_ptr_bad!(
+        /// The `BLKPG` ioctl, defined in
+        /// <linux/blkpg.h>
+        ///
+        /// Incorrectly defined as `_IO`, actually takes one argument
+        block_page,
+        0x1269,
+        BlockPageIoctlArgs
+    );
+}
 
 /// Impl for [`FileExt::lock`] and co.
 fn lock_impl(fd: RawFd, lock: LockType, non_block: bool) -> nix::Result<()> {
@@ -225,6 +319,95 @@ pub trait FileExt: AsRawFd {
     }
 
     // TODO: Dig holes, see `fallocate(1)`.
+
+    /// Tell the kernel to re-read the partition table.
+    /// This call may be unreliable and require reboots.
+    ///
+    /// You may instead want the newer [`FileExt::add_partition`], or
+    /// [`FileExt::remove_partition`]
+    ///
+    /// # Implementation
+    ///
+    /// This uses the `BLKRRPART` ioctl.
+    ///
+    /// # Errors
+    ///
+    /// - If `self` is not a block device
+    /// - If the underlying ioctl does.
+    fn reread_partitions(&self) -> io::Result<()>;
+
+    /// Inform the kernel of a partition, number `part`.
+    ///
+    /// The partition starts at `start` bytes and ends at `end` bytes,
+    /// relative to the start of `self`.
+    ///
+    /// # Implementation
+    ///
+    /// This uses the `BLKPG` ioctl.
+    ///
+    /// # Errors
+    ///
+    /// - If `self` is not a block device.
+    /// - If the underlying ioctl does.
+    fn add_partition(&self, part: i32, start: i64, end: i64) -> io::Result<()>;
+
+    /// Remove partition number `part`.
+    ///
+    /// # Implementation
+    ///
+    /// This uses the `BLKPG` ioctl.
+    ///
+    /// # Errors
+    ///
+    /// - If `self` is not a block device.
+    /// - If the underlying ioctl does.
+    fn remove_partition(&self, part: i32) -> io::Result<()>;
 }
 
-impl FileExt for File {}
+impl FileExt for File {
+    fn reread_partitions(&self) -> io::Result<()> {
+        if !self.metadata()?.file_type().is_block_device() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "File was not a block device",
+            ));
+        }
+        match unsafe { _impl::block_reread_part(self.as_raw_fd()) } {
+            Ok(_) => Ok(()),
+            Err(nix::Error::Sys(e)) => Err(e.into()),
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        }
+    }
+
+    fn add_partition(&self, part: i32, start: i64, end: i64) -> io::Result<()> {
+        if !self.metadata()?.file_type().is_block_device() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "File was not a block device",
+            ));
+        }
+        let mut part = _impl::BlockPagePartArgs::new(part, start, end);
+        let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_ADD_PART, &mut part);
+        match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
+            Ok(_) => Ok(()),
+            Err(nix::Error::Sys(e)) => Err(e.into()),
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        }
+    }
+
+    fn remove_partition(&self, part: i32) -> io::Result<()> {
+        if !self.metadata()?.file_type().is_block_device() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "File was not a block device",
+            ));
+        }
+        let mut part = _impl::BlockPagePartArgs::new(part, 0, 0);
+        let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_DEL_PART, &mut part);
+        match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
+            Ok(_) => Ok(()),
+            Err(nix::Error::Sys(e)) => Err(e.into()),
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        }
+    }
+}
