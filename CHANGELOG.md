@@ -11,8 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `LoadedModule::get_loaded` failed when encountering built-in modules,
-  or modules with parameters that require root to read.
+- `LoadedModule::from_name` not returning an `Err` on non-existent modules.
 
 ## [0.4.3] - 2020-02-19
 
