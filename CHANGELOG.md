@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `BlockDevice::alignment_offset` reporting `discard_alignment` instead.
 
+### Removed
+
+- `BlockDevice`, `Device`, and `BlockDevicePartition` traits.
+
 ## [0.4.4] - 2020-04-05
 
 ### Fixed
