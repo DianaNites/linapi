@@ -371,7 +371,16 @@ impl LoadedModule {
     ///
     /// In this case `refcnt` is [`None`], `coresize` is 0, and `taint` is
     /// [`None`]
+    ///
+    /// This method performs automatic underscore conversion.
     fn from_dir(path: &Path) -> Result<Self> {
+        let name = path
+            .file_name()
+            .expect("Missing module name")
+            .to_str()
+            .expect("Invalid module name");
+        // `/sys/modules` seems to always use `_` in paths?
+        let path = path.with_file_name(name.replace('-', "_"));
         if !path.exists() {
             return Err(ModuleError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -540,8 +549,7 @@ impl ModuleFile {
             &CString::new(param).expect("param can't have internal null bytes"),
         )
         .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
-        // FIXME: Some modules have inconsistent naming, so don't exist despite loading.
-        // Example: `hid-led.ko.xz`, which is named hid_led in `/sys/modules`.
+
         Ok(LoadedModule::from_dir(
             &Path::new(SYSFS_PATH).join("module").join(&self.name),
         )?)
