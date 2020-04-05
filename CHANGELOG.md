@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- `{add/remove}_partition` to `FileExt`.
+- `(un)lock(_non_block)` methods to `FileExt`
+- `allocate` method to `FileExt`
+
 ### Changed
 
 - ***BREAKING*** Reorganized module layout.
