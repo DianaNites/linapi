@@ -5,7 +5,6 @@ use nix::{
     sys::memfd::{memfd_create, MemFdCreateFlag},
 };
 use std::{
-    convert::TryInto,
     ffi::CString,
     fs::File,
     io,
@@ -62,7 +61,8 @@ pub trait FileExt: AsRawFd {
     ///
     /// # Panics
     ///
-    /// - if `path` is more than 249 bytes. This is a Linux Kernel limit.
+    /// - If `path` is more than 249 bytes. This is a Linux Kernel limit.
+    /// - If `path` has any internal null bytes.
     /// - The per process/system file limit is reached.
     /// - Insufficient memory.
     fn create_memory<P: AsRef<Path>>(path: P) -> File {
@@ -199,19 +199,12 @@ pub trait FileExt: AsRawFd {
     ///
     /// # Panics
     ///
-    /// - If `size` does not fit in an `i64`
     /// - If `size` is zero
-    fn allocate(&self, size: u64) -> io::Result<()> {
+    fn allocate(&self, size: i64) -> io::Result<()> {
         assert_ne!(size, 0, "Size cannot be zero");
         let fd = self.as_raw_fd();
         loop {
-            let e = fallocate(
-                fd,
-                FallocateFlags::empty(),
-                0,
-                size.try_into().expect("Size was too big"),
-            )
-            .map(|_| ());
+            let e = fallocate(fd, FallocateFlags::empty(), 0, size).map(|_| ());
             match e {
                 Ok(_) => break,
                 Err(nix::Error::Sys(Errno::EINTR)) => continue,
