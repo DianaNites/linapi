@@ -544,6 +544,7 @@ impl ModuleFile {
     /// function may automatically decompress it.
     pub fn load(&self, param: &str) -> Result<LoadedModule> {
         let img = self.read()?;
+        // FIXME: ModuleError::AlreadyLoaded
         init_module(
             &img,
             &CString::new(param).expect("param can't have internal null bytes"),
