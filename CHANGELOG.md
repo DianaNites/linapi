@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- ***BREAKING*** Reorganized module layout
+
 ### Fixed
 
 - `BlockDevice::alignment_offset` reporting `discard_alignment` instead.
