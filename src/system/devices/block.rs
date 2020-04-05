@@ -1,4 +1,4 @@
-//! Interfaces common to Block devices
+//! This module provides ways to get information about connected Block devices
 use crate::{
     extensions::FileExt,
     util::{DEV_PATH, SYSFS_PATH},

@@ -1,6 +1,3 @@
-//! Interface to devices on linux
-//!
-//! Linux primarily exposes connected devices through sysfs,
-//! most of those interfaces undocumented.
+//! This module provides ways to get information about connected devices
 
 pub mod block;
