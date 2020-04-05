@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `BlockDevice::alignment_offset` reporting `discard_alignment` instead.
 
+## [0.4.4] - 2020-04-05
+
+### Fixed
+
+- `LoadedModule::from_name` not returning an `Err` on non-existent modules.
+
 ## [0.4.3] - 2020-02-19
 
 ### Fixed
@@ -148,7 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release. No notable features
 
 <!-- next-url -->
-[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/DianaNites/linapi/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/DianaNites/linapi/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/DianaNites/linapi/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/DianaNites/linapi/compare/v0.4.0...v0.4.1

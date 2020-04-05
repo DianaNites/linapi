@@ -372,6 +372,9 @@ impl LoadedModule {
     /// In this case `refcnt` is [`None`], `coresize` is 0, and `taint` is
     /// [`None`]
     fn from_dir(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            return Err(ModuleError::Io(std::io::ErrorKind::NotFound.into()));
+        }
         let module_type = if path.join("coresize").exists() {
             Type::Dynamic
         } else {
