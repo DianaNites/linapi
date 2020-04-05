@@ -12,11 +12,6 @@
 //! kernel documentation sources where possible.
 //! This is done on a best effort basis.
 
-mod raw {
-    #![allow(dead_code)]
-    pub mod ioctl;
-}
-
 pub mod error;
 pub mod extensions;
 

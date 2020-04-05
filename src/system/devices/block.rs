@@ -1,12 +1,13 @@
 //! Interfaces common to Block devices
 use crate::{
-    raw::ioctl::block::{add_partition, remove_partition},
+    extensions::FileExt,
     util::{DEV_PATH, SYSFS_PATH},
 };
 use bitflags::bitflags;
 use displaydoc::Display;
 use nix::sys::stat;
 use std::{
+    convert::TryInto,
     fs,
     fs::DirEntry,
     io,
@@ -338,11 +339,16 @@ impl Block {
     /// # Implementation
     ///
     /// This uses the ioctls from `include/linux/blkpg.h`.
-    pub fn add_partition(&mut self, num: u64, start_end: Range<u64>) -> Result<()> {
+    pub fn add_partition(&mut self, num: u64, start_end: Range<i64>) -> Result<()> {
         let f = self.open()?.ok_or_else(|| Error::Invalid)?;
         // TODO: Better errors, rewrite, label.
-        add_partition(&f, num as i32, start_end.start as i64, start_end.end as i64)
-            .map_err(|_| Error::Invalid)?;
+        f.add_partition(
+            num.try_into()
+                .map_err(|_| Error::InvalidArg("Partition number was too large"))?,
+            start_end.start,
+            start_end.end,
+        )
+        .map_err(|_| Error::Invalid)?;
         Ok(())
     }
 
@@ -361,7 +367,11 @@ impl Block {
     pub fn remove_partition(&mut self, num: u64) -> Result<()> {
         let f = self.open()?.ok_or_else(|| Error::Invalid)?;
         // TODO: Better errors, rewrite.
-        remove_partition(&f, num as i32).map_err(|_| Error::Invalid)?;
+        f.remove_partition(
+            num.try_into()
+                .map_err(|_| Error::InvalidArg("Partition number was too large"))?,
+        )
+        .map_err(|_| Error::Invalid)?;
         Ok(())
     }
 
@@ -376,7 +386,12 @@ impl Block {
         let parts = self.partitions()?;
         for part in parts {
             // TODO: Better errors, rewrite.
-            remove_partition(&f, part.number()? as i32).map_err(|_| Error::Invalid)?;
+            f.remove_partition(
+                part.number()?
+                    .try_into()
+                    .map_err(|_| Error::InvalidArg("Partition number was too large"))?,
+            )
+            .map_err(|_| Error::Invalid)?;
         }
         Ok(())
     }
