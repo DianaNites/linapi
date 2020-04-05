@@ -5,7 +5,7 @@ use std::{collections::HashMap, fs, io::prelude::*, path::Path};
 /// Technically Linux requires sysfs to be at `/sys`, calling it a system
 /// configuration error otherwise.
 ///
-/// But theres an upcoming distro planning to experiment with filesystem layout
+/// But our upcoming distro is planning to experiment with filesystem layout
 /// changes, including of `/sys`, so do this to allow easily changing it.
 pub const SYSFS_PATH: &str = "/sys";
 
