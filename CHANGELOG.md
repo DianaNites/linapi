@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.5.1] - 2020-04-05
+
 ### Fixed
 
 - Module loading succeeding, but `LoadedModule` construction failing.
@@ -174,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release. No notable features
 
 <!-- next-url -->
-[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/DianaNites/linapi/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/DianaNites/linapi/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/DianaNites/linapi/compare/v0.4.4...v0.5.0
 [0.4.4]: https://github.com/DianaNites/linapi/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/DianaNites/linapi/compare/v0.4.2...v0.4.3
