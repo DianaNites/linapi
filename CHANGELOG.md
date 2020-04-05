@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- ***BREAKING*** Reorganized module layout
+- ***BREAKING*** Reorganized module layout.
 
 ### Fixed
 
