@@ -535,9 +535,13 @@ impl ModuleFile {
     /// function may automatically decompress it.
     pub fn load(&self, param: &str) -> Result<LoadedModule> {
         let img = self.read()?;
-        init_module(&img, &CString::new(param).unwrap())
-            .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
-        //
+        init_module(
+            &img,
+            &CString::new(param).expect("param can't have internal null bytes"),
+        )
+        .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
+        // FIXME: Some modules have inconsistent naming, so don't exist despite loading.
+        // Example: `hid-led.ko.xz`, which is named hid_led in `/sys/modules`.
         Ok(LoadedModule::from_dir(
             &Path::new(SYSFS_PATH).join("module").join(&self.name),
         )?)
@@ -558,7 +562,7 @@ impl ModuleFile {
         //
         finit_module(
             &file,
-            &CString::new(param).unwrap(),
+            &CString::new(param).expect("param can't have internal null bytes"),
             ModuleInitFlags::MODULE_INIT_IGNORE_MODVERSIONS
                 | ModuleInitFlags::MODULE_INIT_IGNORE_VERMAGIC,
         )
