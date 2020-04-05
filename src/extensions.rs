@@ -125,7 +125,7 @@ pub trait FileExt: AsRawFd {
                 Err(nix::Error::Sys(Errno::EINTR)) => continue,
                 Err(nix::Error::Sys(e @ nix::errno::EWOULDBLOCK)) => return Err(e.into()),
                 Err(e @ nix::Error::Sys(Errno::ENOLCK)) => panic!("{}", e),
-                Err(_) => unreachable!("Lock had nix errors it shouldn't have"),
+                Err(_) => unreachable!("Lock_nonblock had nix errors it shouldn't have"),
             }
         }
         Ok(())
@@ -169,7 +169,7 @@ pub trait FileExt: AsRawFd {
                 Ok(_) => break,
                 Err(nix::Error::Sys(Errno::EINTR)) => continue,
                 Err(nix::Error::Sys(e @ nix::errno::EWOULDBLOCK)) => return Err(e.into()),
-                Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
+                Err(_) => unreachable!("Unlock_nonblock had nix errors it shouldn't have"),
             }
         }
         Ok(())
@@ -218,7 +218,7 @@ pub trait FileExt: AsRawFd {
                 // Not regular file
                 Err(nix::Error::Sys(e @ Errno::ENODEV)) => return Err(e.into()),
                 Err(nix::Error::Sys(e @ Errno::ESPIPE)) => return Err(e.into()),
-                Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
+                Err(_) => unreachable!("Allocate had nix errors it shouldn't have"),
             }
         }
         Ok(())
