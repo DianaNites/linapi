@@ -373,7 +373,10 @@ impl LoadedModule {
     /// [`None`]
     fn from_dir(path: &Path) -> Result<Self> {
         if !path.exists() {
-            return Err(ModuleError::Io(std::io::ErrorKind::NotFound.into()));
+            return Err(ModuleError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Couldn't find loaded module at {}", path.display()),
+            )));
         }
         let module_type = if path.join("coresize").exists() {
             Type::Dynamic
