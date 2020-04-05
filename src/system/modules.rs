@@ -399,7 +399,7 @@ impl LoadedModule {
                 .map(|s| s.trim().to_owned())
                 .ok_or_else(|| ModuleError::InvalidModule(NAME.into()))?,
             module_type,
-            path: path.into(),
+            path,
             parameters: HashMap::new(),
             ref_count: None,
             taint: None,
