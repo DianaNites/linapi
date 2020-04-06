@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Removed
+
+- `LoadedModule::refresh`
+
+### Changed
+
+- `LoadedModule` method return types to `Result`s
+
 ## [0.5.1] - 2020-04-05
 
 ### Fixed
