@@ -11,6 +11,7 @@
 //! This crate attempts to correctly document these interfaces, and provide
 //! kernel documentation sources where possible.
 //! This is done on a best effort basis.
+#![doc(html_root_url = "https://docs.rs/linapi/0.5.1")]
 
 pub mod error;
 pub mod extensions;
