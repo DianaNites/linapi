@@ -37,6 +37,7 @@ use crate::{
     system::{UEvent, UEventAction},
     util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
 };
+use displaydoc::Display;
 #[cfg(feature = "gz")]
 use flate2::bufread::GzDecoder;
 use nix::{
@@ -48,9 +49,11 @@ use std::{
     ffi::CString,
     fs,
     fs::DirEntry,
+    io,
     io::{prelude::*, BufRead},
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 use walkdir::WalkDir;
 use xmas_elf::ElfFile;
 #[cfg(feature = "xz")]
@@ -58,7 +61,18 @@ use xz2::bufread::XzDecoder;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
-pub type Result<T, E = ModuleError> = std::result::Result<T, E>;
+type AnyError = Box<dyn std::error::Error + Send + Sync>;
+
+pub type Result<T, E = AnyError> = std::result::Result<T, E>;
+
+/// Helper to read the `attribute` at `path`
+fn read_attribute<P: AsRef<Path>>(base: P, attribute: &'static str) -> Result<String> {
+    Ok(fs::read_to_string(base.as_ref().join(attribute)).map(|s| s.trim().to_owned())?)
+    // .map_err(|e| AttributeError {
+    //     attribute,
+    //     source: Some(e),
+    // })?)
+}
 
 /// Kernel modules can be "tainted", which serve as a marker for debugging
 /// purposes.
@@ -155,24 +169,33 @@ impl LoadedModule {
     /// - If any expected module attribute was invalid
     pub fn refresh(&mut self) -> Result<()> {
         let mut map = HashMap::new();
-        let par = self.path.join("parameters");
-        if par.exists() {
-            for entry in fs::read_dir(par)? {
-                let entry: DirEntry = entry?;
-                map.insert(
-                    entry
-                        .file_name()
-                        .into_string()
-                        .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?,
-                    fs::read(entry.path()).unwrap_or_default(),
-                );
+        match read_attribute(&self.path, "parameters") {
+            Ok(par) => {
+                for entry in fs::read_dir(par)? {
+                    let entry: DirEntry = entry?;
+                    map.insert(
+                        entry
+                            .file_name()
+                            .into_string()
+                            // FIXME: Unwrap
+                            .unwrap(),
+                        // .map_err(|_| AttributeError {
+                        //     attribute: "parameters",
+                        //     source: None,
+                        // })?,
+                        fs::read(entry.path()).unwrap_or_default(),
+                    );
+                }
             }
-        }
+            e @ Err(_) => {
+                e?;
+            }
+        };
         self.parameters = map;
-        self.ref_count = fs::read_to_string(self.path.join("refcnt"))
-            .map(|s| s.trim().parse())?
+        self.ref_count = read_attribute(&self.path, "refcnt")
+            .map(|s| s.parse())?
             .ok();
-        self.taint = match fs::read_to_string(self.path.join("taint"))?.trim() {
+        self.taint = match &*read_attribute(&self.path, "taint")? {
             "P" => Some(Taint::Proprietary),
             "O" => Some(Taint::OutOfTree),
             "F" => Some(Taint::Forced),
@@ -180,21 +203,22 @@ impl LoadedModule {
             "E" => Some(Taint::Unsigned),
             _ => None,
         };
-        self.status = Some(
-            match fs::read_to_string(self.path.join("initstate"))?.trim() {
-                "live" => Status::Live,
-                "coming" => Status::Coming,
-                "going" => Status::Going,
-                s => Status::Unknown(s.into()),
-            },
-        );
-        self.size = fs::read_to_string(self.path.join("coresize"))
-            .map(|s| s.trim().parse())?
-            .map_err(|_| ModuleError::InvalidModule(PARAMETER.into()))?;
+        self.status = Some(match &*read_attribute(&self.path, "initstate")? {
+            "live" => Status::Live,
+            "coming" => Status::Coming,
+            "going" => Status::Going,
+            s => Status::Unknown(s.into()),
+        });
+        self.size = read_attribute(&self.path, "coresize")?.parse()?;
+        // .map_err(|_e| AttributeError {
+        //     attribute: "coresize",
+        //     source: None,
+        // })?;
         let mut v = Vec::new();
         for re in fs::read_dir(self.path.join("holders"))? {
             let re: DirEntry = re?;
-            v.push(Self::from_dir(&re.path())?)
+            // FIXME: Unwrap
+            v.push(Self::from_dir(&re.path()).unwrap())
         }
         self.holders = v;
         //
@@ -239,12 +263,13 @@ impl LoadedModule {
     /// - On failure
     pub fn unload(self) -> Result<()> {
         delete_module(
-            // This unwrap should be okay, `name` is from the file path which shouldn't have nul
-            // bytes
-            &CString::new(self.name.as_str()).unwrap(),
+            &CString::new(self.name.as_str()).expect("Module name had null bytes"),
             DeleteModuleFlags::O_NONBLOCK,
-        )
-        .map_err(|e| ModuleError::UnloadError(self.name, e.to_string()))?;
+        )?;
+        // .map_err(|e| UnloadError {
+        //     module: self.name,
+        //     source: e,
+        // })?;
         //
         Ok(())
     }
@@ -263,9 +288,7 @@ impl LoadedModule {
     /// - On failure
     pub unsafe fn force_unload(self) -> Result<()> {
         delete_module(
-            // This unwrap should be okay, `name` is from the file path which shouldn't have nul
-            // bytes
-            &CString::new(self.name.as_str()).unwrap(),
+            &CString::new(self.name.as_str()).expect("Module name had null bytes"),
             DeleteModuleFlags::O_NONBLOCK | DeleteModuleFlags::O_TRUNC,
         )
         .map_err(|e| ModuleError::UnloadError(self.name, e.to_string()))?;
@@ -385,7 +408,8 @@ impl LoadedModule {
             return Err(ModuleError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Couldn't find loaded module at {}", path.display()),
-            )));
+            ))
+            .into());
         }
         let module_type = if path.join("coresize").exists() {
             Type::Dynamic
@@ -408,7 +432,8 @@ impl LoadedModule {
             holders: Vec::new(),
         };
         if let Type::Dynamic = s.module_type {
-            s.refresh()?;
+            // FIXME: Unwrap
+            s.refresh().unwrap();
         }
         Ok(s)
     }
@@ -494,7 +519,7 @@ impl ModuleFile {
                 return Ok(s);
             }
         }
-        Err(ModuleError::LoadError(name.into(), NOT_FOUND.into()))
+        Err(ModuleError::LoadError(name.into(), NOT_FOUND.into()).into())
     }
 
     /// Use the file at `path` as a module.
@@ -673,7 +698,7 @@ impl ModuleFile {
             let typ = typ.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
             // Parameters should not have multiple types.
             if x.insert(name, (typ, None)).is_some() {
-                return Err(ModuleError::InvalidModule(MODINFO.into()));
+                return Err(ModuleError::InvalidModule(MODINFO.into()).into());
             };
         }
         for (name, desc) in map.remove("parm").unwrap_or_default().into_iter().map(|s| {
@@ -747,7 +772,7 @@ impl ModuleFile {
                 Ok(v)
             }
             "ko" => Ok(data),
-            _ => Err(ModuleError::InvalidModule(COMPRESSION.into())),
+            _ => Err(ModuleError::InvalidModule(COMPRESSION.into()).into()),
         }
     }
 }
