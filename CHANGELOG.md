@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- ***BREAKING*** `LoadedModule`
+- ***BREAKING*** `ModuleFile`
 - `LoadedModule` method return types to `Result`s
 
 ## [0.5.1] - 2020-04-05
