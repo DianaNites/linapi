@@ -29,7 +29,5 @@ pub(crate) mod text {
 
     pub const NAME: &str = "invalid module name";
 
-    pub const PARAMETER: &str = "invalid module parameter name";
-
     pub const MODINFO: &str = "invalid .modinfo";
 }

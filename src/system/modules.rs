@@ -37,7 +37,6 @@ use crate::{
     system::{UEvent, UEventAction},
     util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
 };
-use displaydoc::Display;
 #[cfg(feature = "gz")]
 use flate2::bufread::GzDecoder;
 use nix::{
@@ -53,7 +52,6 @@ use std::{
     io::{prelude::*, BufRead},
     path::{Path, PathBuf},
 };
-use thiserror::Error;
 use walkdir::WalkDir;
 use xmas_elf::ElfFile;
 #[cfg(feature = "xz")]
@@ -61,23 +59,20 @@ use xz2::bufread::XzDecoder;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
-type AnyError = Box<dyn std::error::Error + Send + Sync>;
+pub type Result<T, E = Box<dyn std::error::Error + Send + Sync>> = std::result::Result<T, E>;
 
-pub type Result<T, E = AnyError> = std::result::Result<T, E>;
-
-/// Helper to read the `attribute` at `path`
-fn read_attribute<P: AsRef<Path>>(base: P, attribute: &'static str) -> Result<String> {
-    Ok(fs::read_to_string(base.as_ref().join(attribute)).map(|s| s.trim().to_owned())?)
-    // .map_err(|e| AttributeError {
-    //     attribute,
-    //     source: Some(e),
-    // })?)
+/// Helper to read the `attribute` at `path`. Trims it.
+fn read_attribute<P: AsRef<Path>>(base: P, attribute: &'static str) -> Result<String, io::Error> {
+    fs::read_to_string(base.as_ref().join(attribute)).map(|s| s.trim().to_owned())
 }
 
 /// Kernel modules can be "tainted", which serve as a marker for debugging
 /// purposes.
 #[derive(Debug, Clone, Copy)]
 pub enum Taint {
+    /// Not tainted
+    Clean,
+
     /// Proprietary Module.
     Proprietary,
 
@@ -139,92 +134,10 @@ pub struct LoadedModule {
 
     /// Path to the module
     path: PathBuf,
-
-    /// Module parameters and their contents
-    parameters: HashMap<String, Vec<u8>>,
-
-    /// Module ref count
-    ref_count: Option<u32>,
-
-    /// Module taint
-    taint: Option<Taint>,
-
-    /// Module status
-    status: Option<Status>,
-
-    /// Module size in bytes
-    size: u64,
-
-    /// Module users
-    holders: Vec<Self>,
 }
 
 // Public
 impl LoadedModule {
-    /// Refresh information on the module
-    ///
-    /// # Errors
-    ///
-    /// - If any expected module attribute couldn't be read
-    /// - If any expected module attribute was invalid
-    pub fn refresh(&mut self) -> Result<()> {
-        let mut map = HashMap::new();
-        match read_attribute(&self.path, "parameters") {
-            Ok(par) => {
-                for entry in fs::read_dir(par)? {
-                    let entry: DirEntry = entry?;
-                    map.insert(
-                        entry
-                            .file_name()
-                            .into_string()
-                            // FIXME: Unwrap
-                            .unwrap(),
-                        // .map_err(|_| AttributeError {
-                        //     attribute: "parameters",
-                        //     source: None,
-                        // })?,
-                        fs::read(entry.path()).unwrap_or_default(),
-                    );
-                }
-            }
-            e @ Err(_) => {
-                e?;
-            }
-        };
-        self.parameters = map;
-        self.ref_count = read_attribute(&self.path, "refcnt")
-            .map(|s| s.parse())?
-            .ok();
-        self.taint = match &*read_attribute(&self.path, "taint")? {
-            "P" => Some(Taint::Proprietary),
-            "O" => Some(Taint::OutOfTree),
-            "F" => Some(Taint::Forced),
-            "C" => Some(Taint::Staging),
-            "E" => Some(Taint::Unsigned),
-            _ => None,
-        };
-        self.status = Some(match &*read_attribute(&self.path, "initstate")? {
-            "live" => Status::Live,
-            "coming" => Status::Coming,
-            "going" => Status::Going,
-            s => Status::Unknown(s.into()),
-        });
-        self.size = read_attribute(&self.path, "coresize")?.parse()?;
-        // .map_err(|_e| AttributeError {
-        //     attribute: "coresize",
-        //     source: None,
-        // })?;
-        let mut v = Vec::new();
-        for re in fs::read_dir(self.path.join("holders"))? {
-            let re: DirEntry = re?;
-            // FIXME: Unwrap
-            v.push(Self::from_dir(&re.path()).unwrap())
-        }
-        self.holders = v;
-        //
-        Ok(())
-    }
-
     /// Get an already loaded module by name
     ///
     /// # Errors
@@ -309,46 +222,109 @@ impl LoadedModule {
     /// Module parameters.
     ///
     /// The kernel exposes these as files in a directory, and their contents are
-    /// entirely module specific, hence `HashMap<String, Vec<u8>>`, which can
-    /// be [`std::io::Read`].
+    /// entirely module specific, hence `HashMap<String, Vec<u8>>`.
     ///
-    /// The key will be the parameter name and the value is it's data
+    /// The key will be the parameter name and the value is it's data.
+    ///
+    /// There is currently no way to *write* parameters.
     ///
     /// # Stability
     ///
     /// The stability of parameters depends entirely on the specific module.
-    pub fn parameters(&self) -> &HashMap<String, Vec<u8>> {
-        &self.parameters
+    ///
+    /// # Panics
+    ///
+    /// - If a module parameters name is not valid UTF-8
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    // FIXME: Need custom type with Read/Write here?
+    pub fn parameters(&self) -> Result<HashMap<String, Vec<u8>>> {
+        let mut map = HashMap::new();
+        let path = self.path.join("parameters");
+        if path.exists() {
+            for entry in fs::read_dir(path)? {
+                let entry: DirEntry = entry?;
+                map.insert(
+                    entry
+                        .file_name()
+                        .into_string()
+                        .expect("Module parameter not valid UTF-8"),
+                    fs::read(entry.path())?,
+                );
+            }
+        }
+        Ok(map)
     }
 
     /// Module reference count.
     ///
     /// If the module is built-in, or if the kernel was not built with
     /// `CONFIG_MODULE_UNLOAD`, this will be [`None`]
-    pub fn ref_count(&self) -> Option<u32> {
-        self.ref_count
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn ref_count(&self) -> Result<Option<u32>> {
+        match read_attribute(&self.path, "refcnt") {
+            Ok(s) => Ok(Some(s.parse()?)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Module size in bytes
-    pub fn size(&self) -> u64 {
-        self.size
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn size(&self) -> Result<u64> {
+        Ok(read_attribute(&self.path, "coresize")?.parse()?)
     }
 
-    /// Module taint, or [`None`] if untainted.
+    /// Module taint.
     ///
     /// See [`Taint`] for details.
-    pub fn taint(&self) -> Option<Taint> {
-        self.taint
+    ///
+    /// # Errors
+    ///
+    /// - On I/O
+    /// - On unexpected taint flags
+    pub fn taint(&self) -> Result<Taint> {
+        // Can a module have *multiple* taint flags?
+        match &*read_attribute(&self.path, "taint")? {
+            "P" => Ok(Taint::Proprietary),
+            "O" => Ok(Taint::OutOfTree),
+            "F" => Ok(Taint::Forced),
+            "C" => Ok(Taint::Staging),
+            "E" => Ok(Taint::Unsigned),
+            "" => Ok(Taint::Clean),
+            _ => Err("Unexpected".into()),
+        }
     }
 
-    /// List of other modules that use/reference this one.
+    /// Names of other modules that use/reference this one.
     ///
     /// # Note
     ///
     /// This uses the `holders` sysfs folder, which is completely undocumented
     /// by the kernel, beware.
-    pub fn holders(&self) -> &Vec<Self> {
-        &self.holders
+    ///
+    /// # Panics
+    ///
+    /// - If the module name is not valid UTF-8
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn holders(&self) -> Result<Vec<String>> {
+        let mut v = Vec::new();
+        for re in fs::read_dir(self.path.join("holders"))? {
+            let re: DirEntry = re?;
+            v.push(re.file_name().into_string().expect("Invalid Module Name"))
+        }
+        Ok(v)
     }
 
     /// Get a [`ModuleFile`] from a [`LoadedModule`]
@@ -362,6 +338,10 @@ impl LoadedModule {
     /// have changed on disk, or been removed.
     ///
     /// This is equivalent to `ModuleFile::from_name(&self.name)`
+    ///
+    /// # Errors
+    ///
+    /// See [`ModuleFile::from_name`]
     pub fn module_file(&self) -> Result<ModuleFile> {
         ModuleFile::from_name(&self.name)
     }
@@ -372,9 +352,17 @@ impl LoadedModule {
     ///
     /// This uses the undocumented `initstate` file, which is probably
     /// `module_state` from `linux/module.h`.
-    pub fn status(&self) -> &Status {
-        // Should be fine, refresh sets it to `Some`.
-        self.status.as_ref().unwrap()
+    ///
+    /// # Errors
+    ///
+    /// - If I/O does
+    pub fn status(&self) -> Result<Status> {
+        match &*read_attribute(&self.path, "initstate")? {
+            "live" => Ok(Status::Live),
+            "coming" => Ok(Status::Coming),
+            "going" => Ok(Status::Going),
+            s => Ok(Status::Unknown(s.into())),
+        }
     }
 }
 
@@ -411,12 +399,13 @@ impl LoadedModule {
             ))
             .into());
         }
+        // Only dynamic modules seem to have `coresize`/`initstate`
         let module_type = if path.join("coresize").exists() {
             Type::Dynamic
         } else {
             Type::BuiltIn
         };
-        let mut s = Self {
+        let s = Self {
             name: path
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -424,17 +413,7 @@ impl LoadedModule {
                 .ok_or_else(|| ModuleError::InvalidModule(NAME.into()))?,
             module_type,
             path,
-            parameters: HashMap::new(),
-            ref_count: None,
-            taint: None,
-            status: None,
-            size: 0,
-            holders: Vec::new(),
         };
-        if let Type::Dynamic = s.module_type {
-            // FIXME: Unwrap
-            s.refresh().unwrap();
-        }
         Ok(s)
     }
 }
