@@ -152,7 +152,7 @@ impl LoadedModule {
     ///
     /// # Errors
     ///
-    /// - IO
+    /// - I/O
     /// - If any modules couldn't be read
     pub fn get_loaded() -> Result<Vec<Self>> {
         let dir = Path::new(SYSFS_PATH).join("module");
