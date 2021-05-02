@@ -46,8 +46,8 @@ fn parse_dev(path: &Path) -> Result<(u64, u64)> {
     let i = fs::read_to_string(path.join("dev"))?;
     let mut i = i.trim().split(':');
     //
-    let major = i.next().ok_or_else(|| Error::Invalid)?;
-    let minor = i.next().ok_or_else(|| Error::Invalid)?;
+    let major = i.next().ok_or(Error::Invalid)?;
+    let minor = i.next().ok_or(Error::Invalid)?;
     //
     let major = major.parse::<u64>().map_err(|_| Error::Invalid)?;
     let minor = minor.parse::<u64>().map_err(|_| Error::Invalid)?;
@@ -340,7 +340,7 @@ impl Block {
     ///
     /// This uses the ioctls from `include/linux/blkpg.h`.
     pub fn add_partition(&mut self, num: u64, start_end: Range<i64>) -> Result<()> {
-        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        let f = self.open()?.ok_or(Error::Invalid)?;
         // TODO: Better errors, rewrite, label.
         f.add_partition(
             num.try_into()
@@ -365,7 +365,7 @@ impl Block {
     /// block.remove_partition(part.number().unwrap());
     /// ```
     pub fn remove_partition(&mut self, num: u64) -> Result<()> {
-        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        let f = self.open()?.ok_or(Error::Invalid)?;
         // TODO: Better errors, rewrite.
         f.remove_partition(
             num.try_into()
@@ -382,7 +382,7 @@ impl Block {
     /// For now this is slightly more efficient than doing it manually,
     /// opening the device only once instead of for each partition.
     pub fn remove_existing_partitions(&mut self) -> Result<()> {
-        let f = self.open()?.ok_or_else(|| Error::Invalid)?;
+        let f = self.open()?.ok_or(Error::Invalid)?;
         let parts = self.partitions()?;
         for part in parts {
             // TODO: Better errors, rewrite.
@@ -413,12 +413,10 @@ impl Block {
     ///
     /// This is usually 512
     pub fn logical_block_size(&self) -> Result<u64> {
-        Ok(
-            fs::read_to_string(self.path.join("queue/logical_block_size"))?
-                .trim()
-                .parse::<u64>()
-                .map_err(|_| Error::Invalid)?,
-        )
+        fs::read_to_string(self.path.join("queue/logical_block_size"))?
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| Error::Invalid)
     }
 }
 
@@ -723,12 +721,10 @@ macro_rules! wakeup_helper {
     ($(#[$outer:meta])* $name:ident, $file:literal) => {
         impl Wakeup<'_> {
             pub fn $name(&self) -> Result<u32> {
-                Ok(
-                    fs::read_to_string(self.path.join(concat!("power/", $file)))?
-                        .trim()
-                        .parse::<u32>()
-                        .map_err(|_| Error::Invalid)?,
-                )
+                fs::read_to_string(self.path.join(concat!("power/", $file)))?
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| Error::Invalid)
             }
         }
     };

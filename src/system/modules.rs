@@ -555,9 +555,7 @@ impl ModuleFile {
         )
         .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
 
-        Ok(LoadedModule::from_dir(
-            &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        )?)
+        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
     }
 
     /// Force load this kernel module, and return the [`LoadedModule`]
@@ -581,9 +579,7 @@ impl ModuleFile {
         )
         .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
         //
-        Ok(LoadedModule::from_dir(
-            &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        )?)
+        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
     }
 
     pub fn path(&self) -> &Path {
