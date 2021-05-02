@@ -20,14 +20,14 @@ categories = [
 ]
 
 [dependencies]
-nix = "0.17.0"
-libc = "0.2.68"
+nix = "0.20.0"
+libc = "0.2.94"
 bitflags = "1.2.1"
-walkdir = "2.3.1"
-thiserror = "1.0.13"
-displaydoc = "0.1.5"
+walkdir = "2.3.2"
+thiserror = "1.0.24"
+displaydoc = "0.2.1"
 xmas-elf = "0.7.0"
-flate2 = { version = "1.0.14", optional = true }
+flate2 = { version = "1.0.20", optional = true }
 xz2 = { version = "0.1.6", optional = true }
 
 [features]
