@@ -1,4 +1,4 @@
-//! This module provides ways to get information about a running Linux system
+//! This module provides ways to access information from a running Linux system
 use std::collections::HashMap;
 
 pub mod devices;

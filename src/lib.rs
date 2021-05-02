@@ -1,4 +1,4 @@
-//! High level bindings to various Linux APIs and interfaces
+//! High level bindings to various Linux System APIs and interfaces
 //!
 //! # Implementation details
 //!
