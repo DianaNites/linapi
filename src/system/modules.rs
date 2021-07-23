@@ -55,6 +55,8 @@ use walkdir::WalkDir;
 use xmas_elf::ElfFile;
 #[cfg(feature = "xz")]
 use xz2::bufread::XzDecoder;
+#[cfg(feature = "zst")]
+use zstd::stream::read::Decoder as ZstDecoder;
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
@@ -724,7 +726,7 @@ impl ModuleFile {
     ///
     /// Returns `data` unchanged if not compressed.
     fn decompress(&self, data: Vec<u8>) -> Result<Vec<u8>> {
-        #[cfg(any(feature = "xz", feature = "gz"))]
+        #[cfg(any(feature = "xz", feature = "gz", feature = "zst"))]
         let mut v = Vec::new();
         let ext = self
             .path
@@ -742,6 +744,14 @@ impl ModuleFile {
             #[cfg(feature = "gz")]
             "gz" => {
                 let mut data = GzDecoder::new(data.as_slice());
+                data.read_to_end(&mut v)
+                    .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
+                Ok(v)
+            }
+            #[cfg(feature = "zst")]
+            "zst" => {
+                let mut data = ZstDecoder::new(data.as_slice())
+                    .map_err(|_| ModuleError::InvalidModule(COMPRESSION.into()))?;
                 data.read_to_end(&mut v)
                     .map_err(|e| ModuleError::InvalidModule(e.to_string()))?;
                 Ok(v)
