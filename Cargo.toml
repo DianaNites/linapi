@@ -1,6 +1,6 @@
 [package]
 name = "linapi"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Diana"]
 edition = "2018"
 #
