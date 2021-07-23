@@ -9,15 +9,8 @@ description = "High level bindings to various Linux APIs and interfaces"
 documentation = "https://docs.rs/linapi"
 repository = "https://github.com/DianaNites/linapi"
 readme = "README.md"
-keywords = [
-    "linux",
-    "kernel",
-    "modules",
-]
-categories = [
-    "api-bindings",
-    "os::unix-apis",
-]
+keywords = ["linux", "kernel", "modules"]
+categories = ["api-bindings", "os::unix-apis"]
 
 [dependencies]
 nix = "0.17.0"
@@ -47,27 +40,27 @@ replace = "{{crate_name}} = \"{{version}}\""
 [[package.metadata.release.pre-release-replacements]]
 file = "CHANGELOG.md"
 search = "Unreleased"
-replace="{{version}}"
+replace = "{{version}}"
 
 [[package.metadata.release.pre-release-replacements]]
 file = "CHANGELOG.md"
 search = "\\.\\.\\.HEAD"
-replace="...{{tag_name}}"
+replace = "...{{tag_name}}"
 exactly = 1
 
 [[package.metadata.release.pre-release-replacements]]
 file = "CHANGELOG.md"
 search = "ReleaseDate"
-replace="{{date}}"
+replace = "{{date}}"
 
 [[package.metadata.release.pre-release-replacements]]
-file="CHANGELOG.md"
-search="<!-- next-header -->"
-replace="<!-- next-header -->\n\n## [Unreleased] - ReleaseDate"
-exactly=1
+file = "CHANGELOG.md"
+search = "<!-- next-header -->"
+replace = "<!-- next-header -->\n\n## [Unreleased] - ReleaseDate"
+exactly = 1
 
 [[package.metadata.release.pre-release-replacements]]
-file="CHANGELOG.md"
-search="<!-- next-url -->"
-replace="<!-- next-url -->\n[Unreleased]: https://github.com/DianaNites/linapi/compare/{{tag_name}}...HEAD"
-exactly=1
+file = "CHANGELOG.md"
+search = "<!-- next-url -->"
+replace = "<!-- next-url -->\n[Unreleased]: https://github.com/DianaNites/linapi/compare/{{tag_name}}...HEAD"
+exactly = 1
