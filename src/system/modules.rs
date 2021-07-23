@@ -21,7 +21,11 @@
 //!
 //! let m = ModuleFile::from_name("MyModule").unwrap();
 //! let loaded = m.load("my_param=1").unwrap();
-//! println!("Loaded module {}. my_param={}", loaded.name(), std::str::from_utf8(&loaded.parameters()["my_param"]).unwrap());
+//! println!(
+//!     "Loaded module {}. my_param={}",
+//!     loaded.name(),
+//!     std::str::from_utf8(&loaded.parameters()["my_param"]).unwrap()
+//! );
 //! ```
 //!
 //! # Implementation
