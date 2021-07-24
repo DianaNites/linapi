@@ -329,7 +329,7 @@ impl Block {
     /// let mut block = Block::get_connected().unwrap().remove(0);
     /// // Tell Linux there is one partition, starting at (1024 * 512) bytes
     /// // and covering the whole device.
-    /// block.add_partition(0, 1024*512..block.size().unwrap());
+    /// block.add_partition(0, 1024*512..block.size().unwrap() as i64);
     /// ```
     ///
     /// # Errors
