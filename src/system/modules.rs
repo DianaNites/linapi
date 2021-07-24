@@ -36,7 +36,7 @@
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-module
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-module
 use crate::{
-    error::{text::*, ModuleError},
+    error::{text::*, ModuleError, ModuleErrorKind, ModuleError_},
     extensions::FileExt,
     system::{UEvent, UEventAction},
     util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
@@ -210,8 +210,8 @@ impl LoadedModule {
             &CString::new(self.name.as_str()).expect("Module name had null bytes"),
             DeleteModuleFlags::O_NONBLOCK | DeleteModuleFlags::O_TRUNC,
         )
-        .map_err(|e| ModuleError::UnloadError(self.name, e.to_string()))?;
-        //
+        .map_err(|e| ModuleError_::new(ModuleErrorKind::UnloadError(self.name), e))?;
+
         Ok(())
     }
 
@@ -399,9 +399,8 @@ impl LoadedModule {
         // `/sys/modules` seems to always use `_` in paths?
         let path = path.with_file_name(name.replace('-', "_"));
         if !path.exists() {
-            return Err(ModuleError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Couldn't find loaded module at {}", path.display()),
+            return Err(ModuleError_::with_none(ModuleErrorKind::NotFound(
+                path.display().to_string(),
             ))
             .into());
         }
