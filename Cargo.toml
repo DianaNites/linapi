@@ -2,7 +2,7 @@
 name = "linapi"
 version = "0.5.3"
 authors = ["Diana"]
-edition = "2018"
+edition = "2021"
 #
 license = "MIT OR Apache-2.0"
 description = "High level bindings to various Linux APIs and interfaces"
