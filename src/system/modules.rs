@@ -490,7 +490,7 @@ impl ModuleFile {
                 .path()
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .and_then(|s| s.splitn(2, '.').next())
+                .map(|s| s.split_once('.').map_or(s, |x| x.0))
                 .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
             if m_name == name {
                 let mut s = Self {
