@@ -634,7 +634,7 @@ impl Power<'_> {
             .write(true)
             .open(self.path.join("power/autosuspend_delay_ms"))?;
         let f = write!(f, "{}", delay.as_millis());
-        if let nix::Error::Sys(nix::errno::Errno::EIO) = nix::Error::last() {
+        if let nix::errno::Errno::EIO = nix::Error::last() {
             return Ok(None);
         }
         f?;

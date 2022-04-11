@@ -195,8 +195,8 @@ pub trait FileExt: AsRawFd {
             let e = lock_impl(fd, lock, false);
             match e {
                 Ok(_) => break,
-                Err(nix::Error::Sys(Errno::EINTR)) => continue,
-                Err(e @ nix::Error::Sys(Errno::ENOLCK)) => panic!("{}", e),
+                Err(Errno::EINTR) => continue,
+                Err(e @ Errno::ENOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock had nix errors it shouldn't have"),
             }
         }
@@ -216,9 +216,9 @@ pub trait FileExt: AsRawFd {
             let e = lock_impl(fd, lock, true);
             match e {
                 Ok(_) => break,
-                Err(nix::Error::Sys(Errno::EINTR)) => continue,
-                Err(nix::Error::Sys(e @ nix::errno::EWOULDBLOCK)) => return Err(e.into()),
-                Err(e @ nix::Error::Sys(Errno::ENOLCK)) => panic!("{}", e),
+                Err(Errno::EINTR) => continue,
+                Err(e @ Errno::EWOULDBLOCK) => return Err(e.into()),
+                Err(e @ Errno::ENOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -241,7 +241,7 @@ pub trait FileExt: AsRawFd {
             let e = flock(fd, FlockArg::Unlock);
             match e {
                 Ok(_) => break,
-                Err(nix::Error::Sys(Errno::EINTR)) => continue,
+                Err(Errno::EINTR) => continue,
                 Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
             }
         }
@@ -261,8 +261,8 @@ pub trait FileExt: AsRawFd {
             let e = flock(fd, FlockArg::UnlockNonblock);
             match e {
                 Ok(_) => break,
-                Err(nix::Error::Sys(Errno::EINTR)) => continue,
-                Err(nix::Error::Sys(e @ nix::errno::EWOULDBLOCK)) => return Err(e.into()),
+                Err(Errno::EINTR) => continue,
+                Err(e @ Errno::EWOULDBLOCK) => return Err(e.into()),
                 Err(_) => unreachable!("Unlock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -301,17 +301,17 @@ pub trait FileExt: AsRawFd {
             let e = fallocate(fd, FallocateFlags::empty(), 0, size).map(|_| ());
             match e {
                 Ok(_) => break,
-                Err(nix::Error::Sys(Errno::EINTR)) => continue,
+                Err(Errno::EINTR) => continue,
                 // Not opened for writing
-                Err(nix::Error::Sys(e @ Errno::EBADF)) => return Err(e.into()),
+                Err(e @ Errno::EBADF) => return Err(e.into()),
                 // I/O
-                Err(nix::Error::Sys(e @ Errno::EFBIG)) => return Err(e.into()),
-                Err(nix::Error::Sys(e @ Errno::EIO)) => return Err(e.into()),
-                Err(nix::Error::Sys(e @ Errno::EPERM)) => return Err(e.into()),
-                Err(nix::Error::Sys(e @ Errno::ENOSPC)) => return Err(e.into()),
+                Err(e @ Errno::EFBIG) => return Err(e.into()),
+                Err(e @ Errno::EIO) => return Err(e.into()),
+                Err(e @ Errno::EPERM) => return Err(e.into()),
+                Err(e @ Errno::ENOSPC) => return Err(e.into()),
                 // Not regular file
-                Err(nix::Error::Sys(e @ Errno::ENODEV)) => return Err(e.into()),
-                Err(nix::Error::Sys(e @ Errno::ESPIPE)) => return Err(e.into()),
+                Err(e @ Errno::ENODEV) => return Err(e.into()),
+                Err(e @ Errno::ESPIPE) => return Err(e.into()),
                 Err(_) => unreachable!("Allocate had nix errors it shouldn't have"),
             }
         }
@@ -374,8 +374,7 @@ impl FileExt for File {
         }
         match unsafe { _impl::block_reread_part(self.as_raw_fd()) } {
             Ok(_) => Ok(()),
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -390,8 +389,7 @@ impl FileExt for File {
         let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_ADD_PART, &mut part);
         match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
             Ok(_) => Ok(()),
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -406,8 +404,7 @@ impl FileExt for File {
         let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_DEL_PART, &mut part);
         match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
             Ok(_) => Ok(()),
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+            Err(e) => Err(e.into()),
         }
     }
 }
