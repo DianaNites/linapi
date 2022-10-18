@@ -296,11 +296,11 @@ pub trait FileExt: imp::FileExtSeal {
         flock(self.as_fd(), FlockOperation::NonBlockingUnlock).map_err(Into::into)
     }
 
-    /// Allocate space on disk for at least `size` bytes
+    /// Allocate space on disk for `size` bytes without overwriting
+    /// existing data
     ///
-    /// Any existing data is kept as-is.
-    ///
-    /// The file size will be at least `size` bytes after this call.
+    /// If `size` is greater than the file size, the file size will become
+    /// `size` after this call
     ///
     /// Subsequent writes up to `size` bytes are guaranteed not to fail
     /// because of lack of disk space.
@@ -318,6 +318,9 @@ pub trait FileExt: imp::FileExtSeal {
     /// Subsequent writes may still fail if on a Copy On Write filesystem
     /// and the file has shared data.
     ///
+    /// This may allocate more space than requested due to filesystem block
+    /// sizes
+    ///
     /// # Errors
     ///
     /// - If `self` is not opened for writing.
@@ -330,7 +333,7 @@ pub trait FileExt: imp::FileExtSeal {
         fallocate(self.as_fd(), FallocateFlags::empty(), 0, size).map_err(Into::into)
     }
 
-    /// Allocate space on disk within `offset + len` bytes
+    /// Allocate space on disk at `offset..len`
     ///
     /// Any existing data within this region is kept as-is.
     ///
@@ -351,7 +354,7 @@ pub trait FileExt: imp::FileExtSeal {
         .map_err(Into::into)
     }
 
-    /// Deallocate space space on disk at `offset..len`
+    /// Deallocates space on disk at `offset..len`
     ///
     /// The file size will not change after this call.
     ///
