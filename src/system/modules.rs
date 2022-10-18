@@ -575,7 +575,7 @@ impl ModuleFile {
     /// Force loading a kernel module is dangerous, it skips important safety
     /// checks that help ensure module compatibility with your kernel.
     pub unsafe fn force_load(&self, param: &str) -> Result<LoadedModule> {
-        let mut file = fs::File::create_memory("decompressed module");
+        let mut file = fs::File::create_memory("decompressed module")?;
         file.write_all(&self.read()?)?;
         //
         finit_module(

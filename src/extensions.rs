@@ -10,7 +10,6 @@ use std::{
 use rustix::{
     fd::{AsFd, IntoFd},
     fs::{fallocate, flock, memfd_create, FallocateFlags, FlockOperation, MemfdFlags},
-    io::Errno,
 };
 
 /// Internal ioctl stuff
@@ -117,6 +116,7 @@ mod imp {
 }
 
 /// Impl for [`FileExt::lock`] and co.
+#[inline]
 fn lock_impl<Fd: AsFd>(fd: Fd, lock: LockType, non_block: bool) -> rustix::io::Result<()> {
     flock(
         fd,
@@ -140,8 +140,12 @@ fn lock_impl<Fd: AsFd>(fd: Fd, lock: LockType, non_block: bool) -> rustix::io::R
 }
 
 /// Impl for [`FileExt::create_memory`] and co.
-fn create_memory_impl(path: &Path, flags: MemfdFlags) -> File {
-    memfd_create(path, flags).unwrap().into_fd().into()
+#[inline]
+fn create_memory_impl(path: &Path, flags: MemfdFlags) -> io::Result<File> {
+    memfd_create(path, flags)
+        .map_err(Into::<io::Error>::into)
+        .map(|f| f.into_fd())
+        .map(Into::<File>::into)
 }
 
 /// Type of lock to use for [`FileExt::lock`]
@@ -170,13 +174,14 @@ pub trait FileExt: imp::FileExtSeal {
     /// and is only used as a debugging marker in `/proc/self/fd/`.
     /// The same name/path may exist multiple times.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// - If `path` is more than 249 bytes. This is a Linux Kernel limit.
+    /// - If `path` is too long.
     /// - If `path` has any internal null bytes.
     /// - The per process/system file limit is reached.
     /// - Insufficient memory.
-    fn create_memory<P: AsRef<Path>>(path: P) -> File {
+    #[inline]
+    fn create_memory<P: AsRef<Path>>(path: P) -> io::Result<File> {
         create_memory_impl(
             path.as_ref(),
             MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
@@ -200,21 +205,13 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// This uses `flock(2)`.
     ///
-    /// This will retry as necessary on `EINTR`
-    ///
-    /// # Panics
+    /// # Errors
     ///
     /// - Kernel runs out of memory for lock records
-    fn lock(&self, lock: LockType) {
-        loop {
-            let e = lock_impl(self.as_fd(), lock, false);
-            match e {
-                Ok(_) => break,
-                Err(Errno::INTR) => continue,
-                Err(e @ Errno::NOLCK) => panic!("{}", e),
-                Err(_) => unreachable!("Lock had nix errors it shouldn't have"),
-            }
-        }
+    /// - If interrupted by a signal handler.
+    #[inline]
+    fn lock(&self, lock: LockType) -> io::Result<()> {
+        lock_impl(self.as_fd(), lock, false).map_err(Into::into)
     }
 
     /// Apply an advisory lock, without blocking
@@ -223,20 +220,11 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// # Errors
     ///
+    /// - Same as [`FileExt::lock`]
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
+    #[inline]
     fn lock_nonblock(&self, lock: LockType) -> io::Result<()> {
-        // FIXME: Can the non-blocking variants get interrupted?
-        loop {
-            let e = lock_impl(self.as_fd(), lock, true);
-            match e {
-                Ok(_) => break,
-                Err(Errno::INTR) => continue,
-                Err(e @ Errno::WOULDBLOCK) => return Err(e.into()),
-                Err(e @ Errno::NOLCK) => panic!("{}", e),
-                Err(_) => unreachable!("Lock_nonblock had nix errors it shouldn't have"),
-            }
-        }
-        Ok(())
+        lock_impl(self.as_fd(), lock, true).map_err(Into::into)
     }
 
     /// Remove an advisory lock
@@ -249,15 +237,13 @@ pub trait FileExt: imp::FileExtSeal {
     /// This uses `flock(2)`.
     ///
     /// This will retry as necessary on `EINTR`
-    fn unlock(&self) {
-        loop {
-            let e = flock(self.as_fd(), FlockOperation::Unlock);
-            match e {
-                Ok(_) => break,
-                Err(Errno::INTR) => continue,
-                Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
-            }
-        }
+    ///
+    /// # Errors
+    ///
+    /// - If interrupted by a signal handler.
+    #[inline]
+    fn unlock(&self) -> io::Result<()> {
+        flock(self.as_fd(), FlockOperation::Unlock).map_err(Into::into)
     }
 
     /// Remove an advisory lock, without blocking
@@ -267,18 +253,10 @@ pub trait FileExt: imp::FileExtSeal {
     /// # Errors
     ///
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
+    /// - If interrupted by a signal handler.
+    #[inline]
     fn unlock_nonblock(&self) -> io::Result<()> {
-        // FIXME: Can the non-blocking variants get interrupted?
-        loop {
-            let e = flock(self.as_fd(), FlockOperation::NonBlockingUnlock);
-            match e {
-                Ok(_) => break,
-                Err(Errno::INTR) => continue,
-                Err(e @ Errno::WOULDBLOCK) => return Err(e.into()),
-                Err(_) => unreachable!("Unlock_nonblock had nix errors it shouldn't have"),
-            }
-        }
-        Ok(())
+        flock(self.as_fd(), FlockOperation::NonBlockingUnlock).map_err(Into::into)
     }
 
     /// Allocate space on disk for at least `size` bytes
