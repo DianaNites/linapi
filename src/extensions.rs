@@ -1,12 +1,10 @@
 //! Linux-specific extensions to std types
 use std::{
-    ffi::CString,
     fs::File,
     io,
     os::unix::{
-        ffi::OsStrExt,
         fs::FileTypeExt,
-        io::{AsRawFd, FromRawFd, RawFd},
+        io::{AsRawFd, RawFd},
     },
     path::Path,
 };
@@ -14,7 +12,10 @@ use std::{
 use nix::{
     errno::Errno,
     fcntl::{fallocate, flock, FallocateFlags, FlockArg},
-    sys::memfd::{memfd_create, MemFdCreateFlag},
+};
+use rustix::{
+    fd::IntoFd,
+    fs::{memfd_create, MemfdFlags},
 };
 
 /// Internal ioctl stuff
@@ -144,11 +145,8 @@ fn lock_impl(fd: RawFd, lock: LockType, non_block: bool) -> nix::Result<()> {
 }
 
 /// Impl for [`FileExt::create_memory`] and co.
-fn create_memory_impl(path: &Path, flags: MemFdCreateFlag) -> File {
-    let name = CString::new(path.as_os_str().as_bytes()).unwrap();
-    let fd = memfd_create(&name, flags).unwrap();
-    // Safe because this is a newly created file descriptor.
-    unsafe { File::from_raw_fd(fd) }
+fn create_memory_impl(path: &Path, flags: MemfdFlags) -> File {
+    memfd_create(path, flags).unwrap().into_fd().into()
 }
 
 /// Type of lock to use for [`FileExt::lock`]
@@ -186,7 +184,7 @@ pub trait FileExt: imp::FileExtSeal {
     fn create_memory<P: AsRef<Path>>(path: P) -> File {
         create_memory_impl(
             path.as_ref(),
-            MemFdCreateFlag::MFD_CLOEXEC | MemFdCreateFlag::MFD_ALLOW_SEALING,
+            MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
         )
     }
 
