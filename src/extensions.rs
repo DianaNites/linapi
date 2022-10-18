@@ -4,7 +4,7 @@ use std::{
     fs::File,
     io,
     os::unix::{
-        ffi::OsStringExt,
+        ffi::OsStrExt,
         fs::FileTypeExt,
         io::{AsRawFd, FromRawFd, RawFd},
     },
@@ -111,6 +111,15 @@ mod _impl {
     );
 }
 
+/// Internal implementation details
+mod imp {
+    use super::*;
+
+    pub trait FileExtSeal: AsRawFd {}
+
+    impl FileExtSeal for File {}
+}
+
 /// Impl for [`FileExt::lock`] and co.
 fn lock_impl(fd: RawFd, lock: LockType, non_block: bool) -> nix::Result<()> {
     flock(
@@ -134,6 +143,14 @@ fn lock_impl(fd: RawFd, lock: LockType, non_block: bool) -> nix::Result<()> {
     )
 }
 
+/// Impl for [`FileExt::create_memory`] and co.
+fn create_memory_impl(path: &Path, flags: MemFdCreateFlag) -> File {
+    let name = CString::new(path.as_os_str().as_bytes()).unwrap();
+    let fd = memfd_create(&name, flags).unwrap();
+    // Safe because this is a newly created file descriptor.
+    unsafe { File::from_raw_fd(fd) }
+}
+
 /// Type of lock to use for [`FileExt::lock`]
 #[derive(Debug, Copy, Clone)]
 pub enum LockType {
@@ -144,16 +161,21 @@ pub enum LockType {
     Exclusive,
 }
 
-/// Extends [`File`]
-pub trait FileExt: AsRawFd {
-    /// Like [`File::create`] except the file exists only in memory.
-    ///
-    /// As the file exists only in memory, `path` doesn't matter
-    /// and is only used as a debugging marker in `/proc/self/fd/`
+/// Extends [`File`] with linux-specific methods
+///
+/// This trait is sealed
+pub trait FileExt: imp::FileExtSeal {
+    /// Like [`File::create`], except the file exists only in memory.
+    /// The file is opened for both reading and writing.
     ///
     /// # Implementation
     ///
-    /// This uses `memfd_create(2)`
+    /// This uses `memfd_create(2)`.
+    /// The `MFD_CLOEXEC` and `MFD_ALLOW_SEALING` flags are set.
+    ///
+    /// As the file exists only in memory, `path` doesn't matter
+    /// and is only used as a debugging marker in `/proc/self/fd/`.
+    /// The same name/path may exist multiple times.
     ///
     /// # Panics
     ///
@@ -162,14 +184,10 @@ pub trait FileExt: AsRawFd {
     /// - The per process/system file limit is reached.
     /// - Insufficient memory.
     fn create_memory<P: AsRef<Path>>(path: P) -> File {
-        let path = path.as_ref();
-        let fd = memfd_create(
-            &CString::new(path.as_os_str().to_os_string().into_vec()).unwrap(),
-            MemFdCreateFlag::MFD_CLOEXEC,
+        create_memory_impl(
+            path.as_ref(),
+            MemFdCreateFlag::MFD_CLOEXEC | MemFdCreateFlag::MFD_ALLOW_SEALING,
         )
-        .unwrap();
-        // Safe because this is a newly created file descriptor.
-        unsafe { File::from_raw_fd(fd) }
     }
 
     /// Apply an advisory lock
