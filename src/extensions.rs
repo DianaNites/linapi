@@ -7,6 +7,7 @@ use std::{
     path::Path,
 };
 
+use bitflags::bitflags;
 use rustix::{
     fd::{AsFd, IntoFd},
     fs::{fallocate, flock, memfd_create, FallocateFlags, FlockOperation, MemfdFlags},
@@ -158,6 +159,26 @@ pub enum LockType {
     Exclusive,
 }
 
+bitflags! {
+    /// Flags for [`FileExt::allocate_flags`]
+    ///
+    /// Unknown flags will be truncated.
+    pub struct AllocateFlags: u32 {
+        /// Keep the file size the same
+        ///
+        /// This may be useful to pre-allocate space at the end of a file,
+        /// for appending.
+        const KEEP_SIZE = 0x01;
+
+        /// Unshare any shared data on Copy On Write filesystems, to
+        /// actually guarantee subsequent writes do not fail.
+        const UNSHARE = 0x40;
+
+        /// Zero all data within the region instead of leaving it as-is.
+        const ZERO = 0x10;
+    }
+}
+
 /// Extends [`File`] with linux-specific methods
 ///
 /// This trait is sealed
@@ -261,12 +282,16 @@ pub trait FileExt: imp::FileExtSeal {
 
     /// Allocate space on disk for at least `size` bytes
     ///
+    /// The file size will be at least `size` bytes after this call.
+    ///
     /// Subsequent writes up to `size` bytes are guaranteed not to fail
     /// because of lack of disk space.
     ///
     /// [`File::set_len`] is similar, but *truncates* the file,
     /// making it sparse, meaning it does not actually take any disk space,
     /// and writes may fail due to a lack of space.
+    ///
+    /// See [`FileExt::allocate_flags`] for more advanced usage
     ///
     /// # Implementation
     ///
@@ -287,7 +312,66 @@ pub trait FileExt: imp::FileExtSeal {
         fallocate(self.as_fd(), FallocateFlags::empty(), 0, size).map_err(Into::into)
     }
 
-    // TODO: Dig holes, see `fallocate(1)`.
+    /// Allocate space on disk within `offset + len` bytes
+    ///
+    /// Any existing data within this region is kept as-is.
+    ///
+    /// See [`FileExt::allocate`] for more details
+    ///
+    /// # Errors
+    ///
+    /// - Same as [`FileExt::allocate`]
+    /// - If an unsupported operation is requested
+    #[inline]
+    fn allocate_flags(&self, offset: u64, len: u64, flags: AllocateFlags) -> io::Result<()> {
+        fallocate(
+            self.as_fd(),
+            FallocateFlags::from_bits_truncate(flags.bits()),
+            offset,
+            len,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Deallocate space space on disk at `offset..len`
+    ///
+    /// The file size will not change after this call.
+    ///
+    /// # Implementation
+    ///
+    /// This uses `fallocate(2)`
+    ///
+    /// # Errors
+    ///
+    /// - If the filesystem doesn't support this operation
+    #[inline]
+    fn deallocate(&self, offset: u64, len: u64) -> io::Result<()> {
+        fallocate(
+            self.as_fd(),
+            FallocateFlags::PUNCH_HOLE | FallocateFlags::KEEP_SIZE,
+            offset,
+            len,
+        )
+        .map_err(Into::into)
+    }
+
+    /// Remove the range `offset..len`
+    ///
+    /// After this operation the file is `len` bytes smaller, and
+    /// any data past `offset+len` appears starting from `offset`.
+    ///
+    /// # Errors
+    ///
+    /// - If `offset+len` is or goes past EOF
+    /// - If the filesystem doesn't support this operation
+    /// - If the filesystem requires a specific granularity, and `offset` and
+    ///   `len` are not the correct granularity.
+    #[inline]
+    fn collapse(&self, offset: u64, len: u64) -> io::Result<()> {
+        fallocate(self.as_fd(), FallocateFlags::COLLAPSE_RANGE, offset, len).map_err(Into::into)
+    }
+
+    // TODO: Insert holes.
 
     /// Tell the kernel to re-read the partition table.
     /// This call may be unreliable and require reboots.
