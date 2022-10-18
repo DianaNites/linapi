@@ -1,21 +1,20 @@
 //! Linux-specific extensions to std types
+// #![allow(unused_imports, dead_code)]
 use std::{
     fs::File,
     io,
-    os::unix::{
-        fs::FileTypeExt,
-        io::{AsRawFd, RawFd},
-    },
+    os::unix::{fs::FileTypeExt, io::AsRawFd},
     path::Path,
 };
 
 use nix::{
     errno::Errno,
-    fcntl::{fallocate, flock, FallocateFlags, FlockArg},
+    fcntl::{fallocate, FallocateFlags},
 };
 use rustix::{
-    fd::IntoFd,
-    fs::{memfd_create, MemfdFlags},
+    fd::{AsFd, IntoFd},
+    fs::{flock, memfd_create, FlockOperation, MemfdFlags},
+    io::Errno as Errno_,
 };
 
 /// Internal ioctl stuff
@@ -116,28 +115,28 @@ mod _impl {
 mod imp {
     use super::*;
 
-    pub trait FileExtSeal: AsRawFd {}
+    pub trait FileExtSeal: AsFd {}
 
     impl FileExtSeal for File {}
 }
 
 /// Impl for [`FileExt::lock`] and co.
-fn lock_impl(fd: RawFd, lock: LockType, non_block: bool) -> nix::Result<()> {
+fn lock_impl<Fd: AsFd>(fd: Fd, lock: LockType, non_block: bool) -> rustix::io::Result<()> {
     flock(
         fd,
         match lock {
             LockType::Shared => {
                 if non_block {
-                    FlockArg::LockSharedNonblock
+                    FlockOperation::NonBlockingLockShared
                 } else {
-                    FlockArg::LockShared
+                    FlockOperation::LockShared
                 }
             }
             LockType::Exclusive => {
                 if non_block {
-                    FlockArg::LockExclusiveNonblock
+                    FlockOperation::NonBlockingLockExclusive
                 } else {
-                    FlockArg::LockExclusive
+                    FlockOperation::LockExclusive
                 }
             }
         },
@@ -193,6 +192,9 @@ pub trait FileExt: imp::FileExtSeal {
     /// A single file can only have one [`LockType`] at a time.
     /// It doesn't matter whether the file was opened for reading or writing.
     ///
+    /// Locks are associated with a file descriptor, and any duplicates
+    /// refer to the same lock.
+    ///
     /// Calling this on an already locked file will change the [`LockType`].
     ///
     /// This may block until the lock can be acquired.
@@ -208,13 +210,12 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - Kernel runs out of memory for lock records
     fn lock(&self, lock: LockType) {
-        let fd = self.as_raw_fd();
         loop {
-            let e = lock_impl(fd, lock, false);
+            let e = lock_impl(self.as_fd(), lock, false);
             match e {
                 Ok(_) => break,
-                Err(Errno::EINTR) => continue,
-                Err(e @ Errno::ENOLCK) => panic!("{}", e),
+                Err(Errno_::INTR) => continue,
+                Err(e @ Errno_::NOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock had nix errors it shouldn't have"),
             }
         }
@@ -228,15 +229,14 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
     fn lock_nonblock(&self, lock: LockType) -> io::Result<()> {
-        let fd = self.as_raw_fd();
         // FIXME: Can the non-blocking variants get interrupted?
         loop {
-            let e = lock_impl(fd, lock, true);
+            let e = lock_impl(self.as_fd(), lock, true);
             match e {
                 Ok(_) => break,
-                Err(Errno::EINTR) => continue,
-                Err(e @ Errno::EWOULDBLOCK) => return Err(e.into()),
-                Err(e @ Errno::ENOLCK) => panic!("{}", e),
+                Err(Errno_::INTR) => continue,
+                Err(e @ Errno_::WOULDBLOCK) => return Err(e.into()),
+                Err(e @ Errno_::NOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -254,12 +254,11 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// This will retry as necessary on `EINTR`
     fn unlock(&self) {
-        let fd = self.as_raw_fd();
         loop {
-            let e = flock(fd, FlockArg::Unlock);
+            let e = flock(self.as_fd(), FlockOperation::Unlock);
             match e {
                 Ok(_) => break,
-                Err(Errno::EINTR) => continue,
+                Err(Errno_::INTR) => continue,
                 Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
             }
         }
@@ -273,14 +272,13 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - [`io::ErrorKind::WouldBlock`] if the operation would block
     fn unlock_nonblock(&self) -> io::Result<()> {
-        let fd = self.as_raw_fd();
         // FIXME: Can the non-blocking variants get interrupted?
         loop {
-            let e = flock(fd, FlockArg::UnlockNonblock);
+            let e = flock(self.as_fd(), FlockOperation::NonBlockingUnlock);
             match e {
                 Ok(_) => break,
-                Err(Errno::EINTR) => continue,
-                Err(e @ Errno::EWOULDBLOCK) => return Err(e.into()),
+                Err(Errno_::INTR) => continue,
+                Err(e @ Errno_::WOULDBLOCK) => return Err(e.into()),
                 Err(_) => unreachable!("Unlock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -314,7 +312,7 @@ pub trait FileExt: imp::FileExtSeal {
     /// - If `size` is zero
     fn allocate(&self, size: i64) -> io::Result<()> {
         assert_ne!(size, 0, "Size cannot be zero");
-        let fd = self.as_raw_fd();
+        let fd = self.as_fd().as_raw_fd();
         loop {
             let e = fallocate(fd, FallocateFlags::empty(), 0, size).map(|_| ());
             match e {
