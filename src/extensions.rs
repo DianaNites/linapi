@@ -7,14 +7,10 @@ use std::{
     path::Path,
 };
 
-use nix::{
-    errno::Errno,
-    fcntl::{fallocate, FallocateFlags},
-};
 use rustix::{
     fd::{AsFd, IntoFd},
-    fs::{flock, memfd_create, FlockOperation, MemfdFlags},
-    io::Errno as Errno_,
+    fs::{fallocate, flock, memfd_create, FallocateFlags, FlockOperation, MemfdFlags},
+    io::Errno,
 };
 
 /// Internal ioctl stuff
@@ -214,8 +210,8 @@ pub trait FileExt: imp::FileExtSeal {
             let e = lock_impl(self.as_fd(), lock, false);
             match e {
                 Ok(_) => break,
-                Err(Errno_::INTR) => continue,
-                Err(e @ Errno_::NOLCK) => panic!("{}", e),
+                Err(Errno::INTR) => continue,
+                Err(e @ Errno::NOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock had nix errors it shouldn't have"),
             }
         }
@@ -234,9 +230,9 @@ pub trait FileExt: imp::FileExtSeal {
             let e = lock_impl(self.as_fd(), lock, true);
             match e {
                 Ok(_) => break,
-                Err(Errno_::INTR) => continue,
-                Err(e @ Errno_::WOULDBLOCK) => return Err(e.into()),
-                Err(e @ Errno_::NOLCK) => panic!("{}", e),
+                Err(Errno::INTR) => continue,
+                Err(e @ Errno::WOULDBLOCK) => return Err(e.into()),
+                Err(e @ Errno::NOLCK) => panic!("{}", e),
                 Err(_) => unreachable!("Lock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -258,7 +254,7 @@ pub trait FileExt: imp::FileExtSeal {
             let e = flock(self.as_fd(), FlockOperation::Unlock);
             match e {
                 Ok(_) => break,
-                Err(Errno_::INTR) => continue,
+                Err(Errno::INTR) => continue,
                 Err(_) => unreachable!("Unlock had nix errors it shouldn't have"),
             }
         }
@@ -277,8 +273,8 @@ pub trait FileExt: imp::FileExtSeal {
             let e = flock(self.as_fd(), FlockOperation::NonBlockingUnlock);
             match e {
                 Ok(_) => break,
-                Err(Errno_::INTR) => continue,
-                Err(e @ Errno_::WOULDBLOCK) => return Err(e.into()),
+                Err(Errno::INTR) => continue,
+                Err(e @ Errno::WOULDBLOCK) => return Err(e.into()),
                 Err(_) => unreachable!("Unlock_nonblock had nix errors it shouldn't have"),
             }
         }
@@ -287,51 +283,30 @@ pub trait FileExt: imp::FileExtSeal {
 
     /// Allocate space on disk for at least `size` bytes
     ///
-    /// Unlike [`File::set_len`], which on Linux creates a sparse file
-    /// without reserving disk space,
-    /// this will actually reserve `size` bytes of zeros, without having to
-    /// write them.
-    ///
     /// Subsequent writes up to `size` bytes are guaranteed not to fail
     /// because of lack of disk space.
+    ///
+    /// [`File::set_len`] is similar, but *truncates* the file,
+    /// making it sparse, meaning it does not actually take any disk space,
+    /// and writes may fail due to a lack of space.
     ///
     /// # Implementation
     ///
     /// This uses `fallocate(2)`
     ///
-    /// This will retry as necessary on `EINTR`
+    /// Subsequent writes may still fail if on a Copy On Write filesystem
+    /// and the file has shared data.
     ///
     /// # Errors
     ///
     /// - If `self` is not opened for writing.
     /// - If `self` is not a regular file.
     /// - If I/O does.
-    ///
-    /// # Panics
-    ///
+    /// - If interrupted by a signal handler.
     /// - If `size` is zero
-    fn allocate(&self, size: i64) -> io::Result<()> {
-        assert_ne!(size, 0, "Size cannot be zero");
-        let fd = self.as_fd().as_raw_fd();
-        loop {
-            let e = fallocate(fd, FallocateFlags::empty(), 0, size).map(|_| ());
-            match e {
-                Ok(_) => break,
-                Err(Errno::EINTR) => continue,
-                // Not opened for writing
-                Err(e @ Errno::EBADF) => return Err(e.into()),
-                // I/O
-                Err(e @ Errno::EFBIG) => return Err(e.into()),
-                Err(e @ Errno::EIO) => return Err(e.into()),
-                Err(e @ Errno::EPERM) => return Err(e.into()),
-                Err(e @ Errno::ENOSPC) => return Err(e.into()),
-                // Not regular file
-                Err(e @ Errno::ENODEV) => return Err(e.into()),
-                Err(e @ Errno::ESPIPE) => return Err(e.into()),
-                Err(_) => unreachable!("Allocate had nix errors it shouldn't have"),
-            }
-        }
-        Ok(())
+    #[inline]
+    fn allocate(&self, size: u64) -> io::Result<()> {
+        fallocate(self.as_fd(), FallocateFlags::empty(), 0, size).map_err(Into::into)
     }
 
     // TODO: Dig holes, see `fallocate(1)`.
