@@ -282,6 +282,8 @@ pub trait FileExt: imp::FileExtSeal {
 
     /// Allocate space on disk for at least `size` bytes
     ///
+    /// Any existing data is kept as-is.
+    ///
     /// The file size will be at least `size` bytes after this call.
     ///
     /// Subsequent writes up to `size` bytes are guaranteed not to fail
@@ -360,6 +362,14 @@ pub trait FileExt: imp::FileExtSeal {
     /// After this operation the file is `len` bytes smaller, and
     /// any data past `offset+len` appears starting from `offset`.
     ///
+    /// This is the counterpart to [`FileExt::insert`]
+    ///
+    /// # Example
+    ///
+    /// If you have a file containing `HELLO WORLD`,
+    /// collapsing at offset 3 and len 7 results in a file containing
+    /// `HELD`
+    ///
     /// # Errors
     ///
     /// - If `offset+len` is or goes past EOF
@@ -371,7 +381,23 @@ pub trait FileExt: imp::FileExtSeal {
         fallocate(self.as_fd(), FallocateFlags::COLLAPSE_RANGE, offset, len).map_err(Into::into)
     }
 
-    // TODO: Insert holes.
+    /// Insert unallocated space at `offset..len`, without overwriting any
+    /// existing data
+    ///
+    /// Any existing data at `offset` is shifted `len` bytes further in the file
+    ///
+    /// This is the counterpart to [`FileExt::collapse`]
+    ///
+    /// # Errors
+    ///
+    /// - If `offset+len` is or goes past EOF
+    /// - If the filesystem doesn't support this operation
+    /// - If the filesystem requires a specific granularity, and `offset` and
+    ///   `len` are not the correct granularity.
+    #[inline]
+    fn insert(&self, offset: u64, len: u64) -> io::Result<()> {
+        fallocate(self.as_fd(), FallocateFlags::INSERT_RANGE, offset, len).map_err(Into::into)
+    }
 
     /// Tell the kernel to re-read the partition table.
     /// This call may be unreliable and require reboots.
