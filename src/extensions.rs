@@ -506,3 +506,57 @@ impl FileExt for File {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(warnings)]
+    use std::{error::Error, fs, io::prelude::*};
+
+    use super::*;
+
+    const TEST_STR: &str = "HELLO WORLD"; // 11
+    const TEST_STR_COLLAPSE: &str = "HELD";
+    const TEST_STR_ZERO: &str = "\0\0\0\0\0\0\0\0\0\0\0";
+
+    /// Test that the various `fallocate` things work properly
+    #[test]
+    fn fallocate() -> Result<(), Box<dyn Error>> {
+        dbg!(TEST_STR.len());
+        dbg!(&TEST_STR[0..11]);
+        let mut buf = String::new();
+        let mut f = File::create_memory("fallocate create_memory test file")?;
+        f.lock(LockType::Exclusive)?;
+        f.lock(LockType::Shared)?;
+        f.unlock()?;
+
+        write!(f, "{TEST_STR}")?;
+        f.rewind()?;
+
+        f.allocate(TEST_STR.len() as u64)?;
+        f.read_to_string(&mut buf)?;
+        f.rewind()?;
+        assert_eq!(buf, TEST_STR, "allocate overwrote TEST_STR");
+        assert_eq!(TEST_STR.len() as u64, f.metadata()?.len());
+
+        f.deallocate(0, TEST_STR.len() as u64)?;
+        assert_eq!(TEST_STR.len() as u64, f.metadata()?.len());
+        buf.clear();
+        f.read_to_string(&mut buf)?;
+        dbg!(&buf);
+        assert_eq!(buf, TEST_STR_ZERO, "deallocate didn't overwrite");
+
+        // Assumes current directories filesystem supports `collapse` and etc
+        // Tested on ext4
+        let mut f = File::tmpfile(".")?;
+        write!(f, "{TEST_STR}")?;
+        f.rewind();
+
+        f.collapse(3, 7)?;
+        buf.clear();
+        f.read_to_string(&mut buf)?;
+        dbg!(&buf);
+
+        panic!();
+        Ok(())
+    }
+}
