@@ -1,9 +1,4 @@
 //! Linux-specific extensions to std types
-use nix::{
-    errno::Errno,
-    fcntl::{fallocate, flock, FallocateFlags, FlockArg},
-    sys::memfd::{memfd_create, MemFdCreateFlag},
-};
 use std::{
     ffi::CString,
     fs::File,
@@ -16,14 +11,21 @@ use std::{
     path::Path,
 };
 
+use nix::{
+    errno::Errno,
+    fcntl::{fallocate, flock, FallocateFlags, FlockArg},
+    sys::memfd::{memfd_create, MemFdCreateFlag},
+};
+
 /// Internal ioctl stuff
 mod _impl {
+    use std::{convert::TryInto, marker::PhantomData, mem};
+
     use nix::{
         ioctl_none,
         ioctl_write_ptr_bad,
         libc::{c_char, c_int, c_longlong, c_void},
     };
-    use std::{convert::TryInto, marker::PhantomData, mem};
 
     pub const BLOCK_ADD_PART: i32 = 1;
     pub const BLOCK_DEL_PART: i32 = 2;

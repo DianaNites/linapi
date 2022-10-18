@@ -1,11 +1,4 @@
 //! This module provides ways to get information about connected Block devices
-use crate::{
-    extensions::FileExt,
-    util::{DEV_PATH, SYSFS_PATH},
-};
-use bitflags::bitflags;
-use displaydoc::Display;
-use nix::sys::stat;
 use std::{
     convert::TryInto,
     fs,
@@ -17,7 +10,16 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+use bitflags::bitflags;
+use displaydoc::Display;
+use nix::sys::stat;
 use thiserror::Error;
+
+use crate::{
+    extensions::FileExt,
+    util::{DEV_PATH, SYSFS_PATH},
+};
 
 /// Block Error type
 #[derive(Debug, Display, Error)]

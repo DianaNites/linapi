@@ -35,18 +35,6 @@
 //!
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-module
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-module
-use crate::{
-    error::{text::*, ModuleError, ModuleErrorKind, ModuleError_},
-    extensions::FileExt,
-    system::{UEvent, UEventAction},
-    util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
-};
-#[cfg(feature = "gz")]
-use flate2::bufread::GzDecoder;
-use nix::{
-    kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
-    sys::utsname::uname,
-};
 use std::{
     collections::HashMap,
     ffi::CString,
@@ -56,12 +44,26 @@ use std::{
     io::{prelude::*, BufRead},
     path::{Path, PathBuf},
 };
+
+#[cfg(feature = "gz")]
+use flate2::bufread::GzDecoder;
+use nix::{
+    kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
+    sys::utsname::uname,
+};
 use walkdir::WalkDir;
 use xmas_elf::ElfFile;
 #[cfg(feature = "xz")]
 use xz2::bufread::XzDecoder;
 #[cfg(feature = "zst")]
 use zstd::stream::read::Decoder as ZstDecoder;
+
+use crate::{
+    error::{text::*, ModuleError, ModuleErrorKind, ModuleError_},
+    extensions::FileExt,
+    system::{UEvent, UEventAction},
+    util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
+};
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 

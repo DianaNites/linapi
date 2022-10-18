@@ -1,6 +1,7 @@
 //! Error handling stuff
-use displaydoc::Display;
 use std::{fmt, io};
+
+use displaydoc::Display;
 use thiserror::Error;
 
 /// Error type for [`crate::system::modules`]

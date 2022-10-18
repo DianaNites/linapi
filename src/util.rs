@@ -1,6 +1,7 @@
 //! Utility functions
-use crate::system::UEventAction;
 use std::{collections::HashMap, fs, io::prelude::*, path::Path};
+
+use crate::system::UEventAction;
 
 /// Technically Linux requires sysfs to be at `/sys`, calling it a system
 /// configuration error otherwise.
