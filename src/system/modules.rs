@@ -473,7 +473,7 @@ impl ModuleFile {
     /// - If the module couldn't be found
     /// - See [`ModuleFile::refresh`]
     pub fn from_name(name: &str) -> Result<Self> {
-        Self::from_name_with_uname(name, uname().release())
+        Self::from_name_with_uname(name, uname()?.release().to_str().unwrap())
     }
 
     /// Search `lib/modules/<uname>` for the module `name`.
