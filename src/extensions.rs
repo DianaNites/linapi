@@ -3,14 +3,17 @@
 use std::{
     fs::File,
     io,
-    os::unix::{fs::FileTypeExt, io::AsRawFd},
+    os::unix::{
+        fs::{FileTypeExt, OpenOptionsExt},
+        io::AsRawFd,
+    },
     path::Path,
 };
 
 use bitflags::bitflags;
 use rustix::{
     fd::{AsFd, IntoFd},
-    fs::{fallocate, flock, memfd_create, FallocateFlags, FlockOperation, MemfdFlags},
+    fs::{fallocate, flock, memfd_create, FallocateFlags, FlockOperation, MemfdFlags, OFlags},
 };
 
 /// Internal ioctl stuff
@@ -207,6 +210,19 @@ pub trait FileExt: imp::FileExtSeal {
             path.as_ref(),
             MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
         )
+    }
+
+    /// Create an unnamed temporary regular file on `path`s filesystem.
+    ///
+    /// The same as [`File::create`] but opened with `O_TMPFILE`
+    #[inline]
+    fn tmpfile<P: AsRef<Path>>(path: P) -> io::Result<File> {
+        File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .custom_flags(OFlags::TMPFILE.bits() as i32)
+            .open(path)
     }
 
     /// Apply an advisory lock
