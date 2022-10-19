@@ -145,7 +145,9 @@ impl Iterator for Attributes {
             .filter(|f| {
                 if let Ok(entry) = f {
                     let path = entry.path();
-                    !path.is_symlink() || (path.is_dir() && !path.join("subsystem").exists())
+                    let sym = path.is_symlink();
+                    let sub = path.is_dir() && path.join("subsystem").exists();
+                    !sym && !sub
                 } else {
                     true
                 }
