@@ -565,9 +565,7 @@ mod tests {
         f.read_to_string(&mut buf)?;
         buf.retain(|c| c != '\0');
         assert_eq!(buf, "ONE THREE", "collapse didn't work correctly");
-        dbg!(&buf);
 
-        // panic!();
         Ok(())
     }
 }
