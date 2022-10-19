@@ -184,7 +184,7 @@ pub struct GenericDevice {
 }
 
 impl GenericDevice {
-    /// Create a new [`Device`] from `path`
+    /// Create a new [`Device`] from `path`, resolving symlinks.
     ///
     /// # Errors
     ///
