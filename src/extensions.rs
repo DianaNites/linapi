@@ -554,20 +554,25 @@ mod tests {
             .tmpfile(true)
             .open(".")?;
         let block = f.metadata()?.st_blksize();
-        f.seek(SeekFrom::Start(block))?;
-        write!(f, "{TEST_STR}")?;
-        f.rewind();
         f.allocate(block * 3)?;
 
-        // Remove a block from the middle of the file
+        write!(f, "ONE ")?;
+        f.seek(SeekFrom::Start(block))?;
+        write!(f, "TWO ")?;
+        f.seek(SeekFrom::Start(block * 2))?;
+        write!(f, "THREE")?;
+        f.rewind()?;
+
+        // Remove the middle block
         f.collapse(block, block)?;
 
-        // buf.clear();
-        // f.read_to_string(&mut buf)?;
-        // assert_eq!(buf, TEST_STR_COLLAPSE, "collapse didn't work correctly");
-        // dbg!(&buf);
+        buf.clear();
+        f.read_to_string(&mut buf)?;
+        buf.retain(|c| c != '\0');
+        assert_eq!(buf, "ONE THREE", "collapse didn't work correctly");
+        dbg!(&buf);
 
-        panic!();
+        // panic!();
         Ok(())
     }
 }
