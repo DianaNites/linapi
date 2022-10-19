@@ -331,7 +331,7 @@ pub trait FileExt: imp::FileExtSeal {
         fallocate(self.as_fd(), FallocateFlags::empty(), 0, size).map_err(Into::into)
     }
 
-    /// Allocate space on disk at `offset..len`
+    /// Allocate space on disk at `offset + len`
     ///
     /// Any existing data within this region is kept as-is.
     ///
@@ -352,7 +352,7 @@ pub trait FileExt: imp::FileExtSeal {
         .map_err(Into::into)
     }
 
-    /// Deallocates space on disk at `offset..len`
+    /// Deallocates space on disk at `offset + len`
     ///
     /// The file size will not change after this call.
     ///
@@ -374,7 +374,7 @@ pub trait FileExt: imp::FileExtSeal {
         .map_err(Into::into)
     }
 
-    /// Remove the range `offset..len`
+    /// Remove the range `offset + len`
     ///
     /// After this operation the file is `len` bytes smaller, and
     /// any data past `offset+len` appears starting from `offset`.
@@ -398,7 +398,7 @@ pub trait FileExt: imp::FileExtSeal {
         fallocate(self.as_fd(), FallocateFlags::COLLAPSE_RANGE, offset, len).map_err(Into::into)
     }
 
-    /// Insert unallocated space at `offset..len`, without overwriting any
+    /// Insert unallocated space at `offset + len`, without overwriting any
     /// existing data
     ///
     /// Any existing data at `offset` is shifted `len` bytes further in the file
@@ -533,7 +533,12 @@ impl OpenOptionsExt for OpenOptions {}
 #[cfg(test)]
 mod tests {
     #![allow(warnings)]
-    use std::{error::Error, fs, io::prelude::*};
+    use std::{
+        error::Error,
+        fs,
+        io::{prelude::*, SeekFrom},
+        os::linux::fs::MetadataExt,
+    };
 
     use super::*;
 
@@ -570,14 +575,24 @@ mod tests {
 
         // Assumes current directories filesystem supports `collapse` and etc
         // Tested on ext4
-        let mut f = File::tmpfile(".")?;
+        let mut f = File::options()
+            .write(true)
+            .read(true)
+            .tmpfile(true)
+            .open(".")?;
+        let block = f.metadata()?.st_blksize();
+        f.seek(SeekFrom::Start(block))?;
         write!(f, "{TEST_STR}")?;
         f.rewind();
+        f.allocate(block * 3)?;
 
-        f.collapse(3, 7)?;
-        buf.clear();
-        f.read_to_string(&mut buf)?;
-        dbg!(&buf);
+        // Remove a block from the middle of the file
+        f.collapse(block, block)?;
+
+        // buf.clear();
+        // f.read_to_string(&mut buf)?;
+        // assert_eq!(buf, TEST_STR_COLLAPSE, "collapse didn't work correctly");
+        // dbg!(&buf);
 
         panic!();
         Ok(())
