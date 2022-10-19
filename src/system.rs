@@ -24,3 +24,5 @@ pub trait UEvent {
     /// Return the Key=Value pairs in the `uevent` file.
     fn read(&self) -> HashMap<String, String>;
 }
+
+pub mod class;
