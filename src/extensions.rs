@@ -505,10 +505,9 @@ impl OpenOptionsExt for OpenOptions {}
 
 #[cfg(test)]
 mod tests {
-    #![allow(warnings)]
+    // #![allow(warnings)]
     use std::{
         error::Error,
-        fs,
         io::{prelude::*, SeekFrom},
         os::linux::fs::MetadataExt,
     };
@@ -516,14 +515,11 @@ mod tests {
     use super::*;
 
     const TEST_STR: &str = "HELLO WORLD"; // 11
-    const TEST_STR_COLLAPSE: &str = "HELD";
     const TEST_STR_ZERO: &str = "\0\0\0\0\0\0\0\0\0\0\0";
 
     /// Test that the various `fallocate` things work properly
     #[test]
     fn fallocate() -> Result<(), Box<dyn Error>> {
-        dbg!(TEST_STR.len());
-        dbg!(&TEST_STR[0..11]);
         let mut buf = String::new();
         let mut f = File::create_memory("fallocate create_memory test file")?;
         f.lock(LockType::Exclusive)?;
@@ -543,7 +539,6 @@ mod tests {
         assert_eq!(TEST_STR.len() as u64, f.metadata()?.len());
         buf.clear();
         f.read_to_string(&mut buf)?;
-        dbg!(&buf);
         assert_eq!(buf, TEST_STR_ZERO, "deallocate didn't overwrite");
 
         // Assumes current directories filesystem supports `collapse` and etc
