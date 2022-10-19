@@ -8,11 +8,14 @@
 //! See the [sysfs rules][1] for details
 //!
 //! [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
-
+#![allow(unused_variables, unused_imports, clippy::all, dead_code)]
 use std::{
+    collections::HashMap,
     ffi::{OsStr, OsString},
+    fs::{DirEntry, ReadDir},
+    io,
     os::unix::ffi::OsStrExt,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use self::imp::Sealed;
@@ -25,7 +28,8 @@ mod imp {
 
     pub trait Sealed {}
 
-    // impl Sealed for Device {}
+    impl Sealed for block::Block {}
+    impl Sealed for GenericDevice {}
 }
 
 /// A kernel "Device"
@@ -80,5 +84,138 @@ pub trait Device: Sealed {
             .file_name()
             .expect("subsystem cannot end in ..")
             .to_os_string()
+    }
+
+    /// Driver for this device
+    ///
+    /// Returns [`None`] if this device has no driver currently associated with
+    /// it
+    ///
+    /// # Example
+    ///
+    /// `drm`
+    fn driver(&self) -> Option<OsString> {
+        self.path().join("driver").read_link().ok().map(|f| {
+            f.file_name()
+                .expect("driver cannot end in ..")
+                .to_os_string()
+        })
+    }
+
+    /// Returns an iterator over the "raw" device attributes
+    ///
+    /// This iterator yields <code>[std::io::Result]<[Attribute]></code>
+    fn attributes(&self) -> io::Result<Attributes> {
+        Attributes::new(self.path())
+    }
+}
+
+pub type Attr = HashMap<String, io::Result<Vec<u8>>>;
+
+/// Iterator over [`Device`] attributes
+///
+/// Created by [`Device::attributes`]
+pub struct Attributes {
+    iter: ReadDir,
+}
+
+impl Attributes {
+    fn new(path: &Path) -> io::Result<Self> {
+        Ok(Self {
+            iter: path.read_dir()?,
+        })
+    }
+}
+
+impl Iterator for Attributes {
+    type Item = std::io::Result<Attribute>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // FIXME: Has to recurse, potentially more than once,
+        // into subdirectories, for sub-attributes.
+        let next = self
+            .iter
+            .by_ref()
+            // Filter out symlinks and sub-devices
+            // FIXME: If an attribute subdirectory has permissions
+            // preventing it from being read, it will incorrectly be skipped.
+            // The permission error should instead make it to `Attribute::new`
+            // and be exposed to the user
+            .filter(|f| {
+                if let Ok(entry) = f {
+                    let path = entry.path();
+                    !path.is_symlink() && (path.is_dir() && !path.join("subsystem").exists())
+                } else {
+                    true
+                }
+            })
+            .next()?;
+
+        Some(next.and_then(|f| Attribute::new(&f)))
+    }
+}
+
+/// Represents a "raw" [`Device`] attribute
+pub struct Attribute {
+    /// Attribute name
+    name: OsString,
+}
+
+impl Attribute {
+    fn new(entry: &DirEntry) -> io::Result<Self> {
+        let name = entry.file_name();
+        Ok(Self { name })
+    }
+
+    /// Attribute name
+    ///
+    /// # Example
+    ///
+    /// For an attribute `control` in a subdirectory `power`,
+    /// this will be `power/control`.
+    pub fn name(&self) -> &OsStr {
+        &self.name
+    }
+}
+
+/// A generic linux [`Device`]
+pub struct GenericDevice {
+    path: PathBuf,
+}
+
+impl GenericDevice {
+    /// Create a new [`Device`] from `path`
+    ///
+    /// # Errors
+    ///
+    /// If `path` is not a device under sysfs
+    pub fn new(path: PathBuf) -> io::Result<Self> {
+        let path = path.canonicalize()?;
+        // FIXME: only works with `/sys`
+        if path.starts_with("/sys/devices") {
+            Ok(Self { path })
+        } else {
+            Err(io::ErrorKind::InvalidInput.into())
+        }
+    }
+}
+
+impl Device for GenericDevice {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn devpath() {
+        let _path = Path::new(
+            "/System/devices/kernel/devices/pci0000:00/0000:00:08.1/0000:08:00.0/drm/card1",
+        );
+        let path = Path::new("/sys/devices/pci0000:00/0000:00:08.1/0000:08:00.0/drm/card1");
+        panic!();
     }
 }
