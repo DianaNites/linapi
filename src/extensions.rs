@@ -174,9 +174,13 @@ bitflags! {
 
         /// Unshare any shared data on Copy On Write filesystems, to
         /// actually guarantee subsequent writes do not fail.
+        ///
+        /// Not all filesystems support this operation
         const UNSHARE = 0x40;
 
         /// Zero all data within the region instead of leaving it as-is.
+        ///
+        /// Not all filesystems support this operation
         const ZERO = 0x10;
     }
 }
@@ -549,6 +553,15 @@ mod tests {
             .tmpfile(true)
             .open(".")?;
         let block = f.metadata()?.st_blksize();
+
+        write!(f, "{TEST_STR}")?;
+        f.rewind()?;
+        f.allocate_flags(0, TEST_STR.len() as u64, AllocateFlags::ZERO)?;
+        buf.clear();
+        f.read_to_string(&mut buf)?;
+        f.rewind()?;
+        assert_eq!(buf, TEST_STR_ZERO, "allocate_flags(ZERO) didn't overwrite");
+
         f.allocate(block * 3)?;
 
         write!(f, "ONE ")?;
