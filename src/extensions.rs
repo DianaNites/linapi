@@ -1,10 +1,10 @@
 //! Linux-specific extensions to std types
 // #![allow(unused_imports, dead_code)]
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io,
     os::unix::{
-        fs::{FileTypeExt, OpenOptionsExt},
+        fs::{FileTypeExt, OpenOptionsExt as StdOpenOptionsExt},
         io::AsRawFd,
     },
     path::Path,
@@ -115,8 +115,10 @@ mod imp {
     use super::*;
 
     pub trait FileExtSeal: AsFd {}
-
     impl FileExtSeal for File {}
+
+    pub trait OpenOptionsExtSeal: StdOpenOptionsExt {}
+    impl OpenOptionsExtSeal for OpenOptions {}
 }
 
 /// Impl for [`FileExt::lock`] and co.
@@ -212,17 +214,13 @@ pub trait FileExt: imp::FileExtSeal {
         )
     }
 
-    /// Create an unnamed temporary regular file on `path`s filesystem.
+    /// Create an unnamed temporary regular file on `path`s filesystem in
+    /// write-only mode.
     ///
-    /// The same as [`File::create`] but opened with `O_TMPFILE`
+    /// See the [`OpenOptionsExt::tmpfile`] function for more details.
     #[inline]
     fn tmpfile<P: AsRef<Path>>(path: P) -> io::Result<File> {
-        File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags(OFlags::TMPFILE.bits() as i32)
-            .open(path)
+        File::options().write(true).tmpfile(true).open(path)
     }
 
     /// Apply an advisory lock
@@ -506,6 +504,31 @@ impl FileExt for File {
         }
     }
 }
+
+/// Extends [`OpenOptions`] with linux-specific methods
+///
+/// This trait is sealed
+pub trait OpenOptionsExt: imp::OpenOptionsExtSeal {
+    /// Sets the option to create a tmpfile
+    ///
+    /// In order for a tmpfile to be created, [`OpenOptions::write`] or
+    /// [`OpenOptions::read`] and [`OpenOptions::write`] must be used,
+    /// and the supplied path must be a directory.
+    ///
+    /// # Implementation
+    ///
+    /// `O_TMPFILE`
+    #[inline]
+    fn tmpfile(&mut self, tmpfile: bool) -> &mut Self {
+        if tmpfile {
+            self.custom_flags(OFlags::TMPFILE.bits() as i32)
+        } else {
+            self
+        }
+    }
+}
+
+impl OpenOptionsExt for OpenOptions {}
 
 #[cfg(test)]
 mod tests {
