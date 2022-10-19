@@ -3,10 +3,7 @@
 use std::{
     fs::{File, OpenOptions},
     io,
-    os::unix::{
-        fs::{FileTypeExt, OpenOptionsExt as StdOpenOptionsExt},
-        io::AsRawFd,
-    },
+    os::unix::{fs::OpenOptionsExt as StdOpenOptionsExt, io::AsRawFd},
     path::Path,
 };
 
@@ -430,7 +427,12 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - If `self` is not a block device
     /// - If the underlying ioctl does.
-    fn reread_partitions(&self) -> io::Result<()>;
+    fn reread_partitions(&self) -> io::Result<()> {
+        match unsafe { _impl::block_reread_part(self.as_fd().as_raw_fd()) } {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
 
     /// Inform the kernel of a partition, number `part`.
     ///
@@ -445,7 +447,14 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - If `self` is not a block device.
     /// - If the underlying ioctl does.
-    fn add_partition(&self, part: i32, start: i64, end: i64) -> io::Result<()>;
+    fn add_partition(&self, part: i32, start: i64, end: i64) -> io::Result<()> {
+        let mut part = _impl::BlockPagePartArgs::new(part, start, end);
+        let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_ADD_PART, &mut part);
+        match unsafe { _impl::block_page(self.as_fd().as_raw_fd(), &args) } {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
 
     /// Remove partition number `part`.
     ///
@@ -457,53 +466,17 @@ pub trait FileExt: imp::FileExtSeal {
     ///
     /// - If `self` is not a block device.
     /// - If the underlying ioctl does.
-    fn remove_partition(&self, part: i32) -> io::Result<()>;
-}
-
-impl FileExt for File {
-    fn reread_partitions(&self) -> io::Result<()> {
-        if !self.metadata()?.file_type().is_block_device() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "File was not a block device",
-            ));
-        }
-        match unsafe { _impl::block_reread_part(self.as_raw_fd()) } {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    fn add_partition(&self, part: i32, start: i64, end: i64) -> io::Result<()> {
-        if !self.metadata()?.file_type().is_block_device() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "File was not a block device",
-            ));
-        }
-        let mut part = _impl::BlockPagePartArgs::new(part, start, end);
-        let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_ADD_PART, &mut part);
-        match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
-    }
-
     fn remove_partition(&self, part: i32) -> io::Result<()> {
-        if !self.metadata()?.file_type().is_block_device() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "File was not a block device",
-            ));
-        }
         let mut part = _impl::BlockPagePartArgs::new(part, 0, 0);
         let args = _impl::BlockPageIoctlArgs::new(_impl::BLOCK_DEL_PART, &mut part);
-        match unsafe { _impl::block_page(self.as_raw_fd(), &args) } {
+        match unsafe { _impl::block_page(self.as_fd().as_raw_fd(), &args) } {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
         }
     }
 }
+
+impl FileExt for File {}
 
 /// Extends [`OpenOptions`] with linux-specific methods
 ///
