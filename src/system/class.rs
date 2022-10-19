@@ -115,6 +115,7 @@ pub type Attr = HashMap<String, io::Result<Vec<u8>>>;
 /// Iterator over [`Device`] attributes
 ///
 /// Created by [`Device::attributes`]
+#[derive(Debug)]
 pub struct Attributes {
     iter: ReadDir,
 }
@@ -156,6 +157,7 @@ impl Iterator for Attributes {
 }
 
 /// Represents a "raw" [`Device`] attribute
+#[derive(Debug)]
 pub struct Attribute {
     /// Attribute name
     name: OsString,
@@ -179,6 +181,7 @@ impl Attribute {
 }
 
 /// A generic linux [`Device`]
+#[derive(Debug)]
 pub struct GenericDevice {
     path: PathBuf,
 }
@@ -189,7 +192,8 @@ impl GenericDevice {
     /// # Errors
     ///
     /// If `path` is not a device under sysfs
-    pub fn new(path: PathBuf) -> io::Result<Self> {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let path = path.as_ref().to_path_buf();
         let path = path.canonicalize()?;
         // FIXME: only works with `/sys`
         if path.starts_with("/sys/devices") {
