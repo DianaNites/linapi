@@ -110,8 +110,6 @@ pub trait Device: Sealed {
     }
 }
 
-pub type Attr = HashMap<String, io::Result<Vec<u8>>>;
-
 /// Iterator over [`Device`] attributes
 ///
 /// Created by [`Device::attributes`]
@@ -145,28 +143,26 @@ impl Iterator for Attributes {
             .filter(|f| {
                 if let Ok(entry) = f {
                     let path = entry.path();
-                    !path.is_symlink() && !path.is_dir() && !path.join("subsystem").exists()
+                    !path.is_symlink() && !(path.is_dir() && path.join("subsystem").exists())
                 } else {
                     true
                 }
             })
             .next()?;
 
-        Some(next.and_then(|f| Attribute::new(&f)))
+        Some(next.and_then(|f| Attribute::new(f)))
     }
 }
 
 /// Represents a "raw" [`Device`] attribute
 #[derive(Debug)]
 pub struct Attribute {
-    /// Attribute name
-    name: OsString,
+    entry: DirEntry,
 }
 
 impl Attribute {
-    fn new(entry: &DirEntry) -> io::Result<Self> {
-        let name = entry.file_name();
-        Ok(Self { name })
+    fn new(entry: DirEntry) -> io::Result<Self> {
+        Ok(Self { entry })
     }
 
     /// Attribute name
@@ -175,9 +171,16 @@ impl Attribute {
     ///
     /// For an attribute `control` in a subdirectory `power`,
     /// this will be `power/control`.
-    pub fn name(&self) -> &OsStr {
-        &self.name
+    pub fn name(&self) -> OsString {
+        self.entry.file_name()
     }
+}
+
+// impl Read/Write for Attribute
+// ENUM
+
+pub enum Attr {
+    Attr,
 }
 
 /// A generic linux [`Device`]
@@ -214,7 +217,20 @@ impl Device for GenericDevice {
 mod tests {
     use super::*;
 
+    type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
     #[test]
+    fn attributes() -> Result<()> {
+        let dev = GenericDevice::new("/sys/block/nvme1n1/")?;
+        for attr in dev.attributes()? {
+            dbg!(&attr);
+        }
+        panic!();
+        // Ok(())
+    }
+
+    #[test]
+    #[cfg(no)]
     fn devpath() {
         let _path = Path::new(
             "/System/devices/kernel/devices/pci0000:00/0000:00:08.1/0000:08:00.0/drm/card1",
