@@ -5,9 +5,10 @@
 //! Within the kernel, these distinctions do not exist and everything is
 //! just a [`Device`].
 //!
-//! See the [sysfs rules][1] for details
+//! See the [sysfs rules][1] and [sysfs-devices][2] file for details
 //!
 //! [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
+//! [2]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-devices
 #![allow(unused_variables, unused_imports, clippy::all, dead_code)]
 use std::{
     collections::HashMap,
@@ -153,7 +154,12 @@ pub trait Device: Sealed {
 
     /// Returns the parent device, if it exists
     fn parent(&self) -> Option<GenericDevice> {
-        GenericDevice::new(self.path().parent()?).ok()
+        while let Some(parent) = self.path().parent() {
+            if parent.join("subsystem").exists() {
+                return GenericDevice::new(parent).ok();
+            }
+        }
+        None
     }
 }
 
