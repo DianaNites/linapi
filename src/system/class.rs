@@ -23,7 +23,6 @@ use self::imp::{read_attrs, Sealed, SYSFS_PATH};
 pub mod block;
 
 mod imp {
-    #![allow(unused_imports)]
     use super::*;
 
     pub trait Sealed {}
