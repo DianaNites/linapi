@@ -12,6 +12,7 @@
 #![allow(unused_variables, unused_imports, clippy::all, dead_code, unused_mut)]
 use std::{
     convert::TryFrom,
+    fs,
     io,
     path::{Path, PathBuf},
 };
@@ -74,6 +75,26 @@ impl Block {
 
         Ok(devices)
     }
+
+    /// Get device model, if it exists.
+    pub fn model(&self) -> io::Result<Option<String>> {
+        let mut parent = self.parent();
+        while let Some(dev) = parent {
+            let sub = dev.subsystem()?;
+            if sub == "nvme" || sub == "scsi" {
+                // Note that this file is mostly undocumented
+                let model = dev.path().join("model");
+                if !model.exists() {
+                    return Ok(None);
+                }
+                return Ok(Some(
+                    fs::read_to_string(model).map(|s| s.trim().to_owned())?,
+                ));
+            }
+            parent = dev.parent();
+        }
+        Ok(None)
+    }
 }
 
 impl Device for Block {
@@ -104,7 +125,10 @@ mod tests {
     #[test]
     fn devices() -> Result<()> {
         let devices = Block::devices();
-        dbg!(&devices);
+        // dbg!(&devices);
+        for device in devices? {
+            dbg!(&device.model());
+        }
         panic!();
         Ok(())
     }
