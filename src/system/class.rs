@@ -154,17 +154,19 @@ pub trait Device: Sealed {
 
     /// Returns the parent device, if it exists
     fn parent(&self) -> Option<GenericDevice> {
-        while let Some(parent) = self.path().parent() {
-            if parent.join("subsystem").exists() {
-                return GenericDevice::new(parent).ok();
+        let mut parent = self.path().parent();
+        while let Some(path) = parent {
+            if path.join("subsystem").exists() {
+                return GenericDevice::new(path).ok();
             }
+            parent = path.parent();
         }
         None
     }
 }
 
 /// A generic linux [`Device`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GenericDevice {
     path: PathBuf,
 }
@@ -202,8 +204,17 @@ mod tests {
     #[test]
     fn attributes() -> Result<()> {
         let dev = GenericDevice::new("/sys/block/nvme1n1/")?;
-        let _ = dbg!(dev.subsystem());
-        let _ = dbg!(dev.driver());
+        // let _ = dbg!(dev.subsystem());
+        // let _ = dbg!(dev.driver());
+        dbg!(dev.path());
+        let mut d = dev.clone();
+        println!();
+        while let Some(dev) = d.parent() {
+            dbg!(&dev);
+            dbg!(&dev.subsystem());
+            println!();
+            d = dev;
+        }
         for attr in dev.attributes() {
             // dbg!(&attr);
             // dbg!(&attr.map(|a| a.name()));
