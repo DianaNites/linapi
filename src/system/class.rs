@@ -31,7 +31,24 @@ mod imp {
 
     impl Sealed for block::Block {}
     impl Sealed for GenericDevice {}
+
+    pub fn read_attrs(path: &Path, buf: &mut Vec<PathBuf>) -> io::Result<()> {
+        for dir in path.read_dir()? {
+            let dir = dir?;
+            let ty = dir.file_type()?;
+            let path = dir.path();
+            if ty.is_symlink() {
+                continue;
+            }
+            if ty.is_dir() {
+                let _ = read_attrs(&path, buf);
+            }
+            buf.push(path);
+        }
+        Ok(())
+    }
 }
+use imp::read_attrs;
 
 /// A kernel "Device"
 ///
@@ -74,17 +91,22 @@ pub trait Device: Sealed {
 
     /// Kernel subsystem
     ///
+    /// # Errors
+    ///
+    /// This can fail if you dont have permission to access the device
+    /// directory.
+    ///
     /// # Example
     ///
     /// `drm`
-    fn subsystem(&self) -> OsString {
-        self.path()
+    fn subsystem(&self) -> io::Result<OsString> {
+        Ok(self
+            .path()
             .join("subsystem")
-            .read_link()
-            .expect("subsystem cannot be missing")
+            .read_link()?
             .file_name()
             .expect("subsystem cannot end in ..")
-            .to_os_string()
+            .to_os_string())
     }
 
     /// Driver for this device
@@ -92,133 +114,42 @@ pub trait Device: Sealed {
     /// Returns [`None`] if this device has no driver currently associated with
     /// it
     ///
+    /// # Errors
+    ///
+    /// This can fail if you dont have permission to access the device
+    /// directory.
+    ///
     /// # Example
     ///
     /// `drm`
-    fn driver(&self) -> Option<OsString> {
-        self.path().join("driver").read_link().ok().map(|f| {
+    fn driver(&self) -> io::Result<Option<OsString>> {
+        self.subsystem()?;
+        Ok(self.path().join("driver").read_link().ok().map(|f| {
             f.file_name()
                 .expect("driver cannot end in ..")
                 .to_os_string()
-        })
+        }))
     }
 
-    /// Returns an iterator over the "raw" device attributes
+    /// Returns the path to every visible attribute, recursively, sorted.
     ///
-    /// This iterator yields <code>[std::io::Result]<[Attribute]></code>
-    fn attributes(&self) -> io::Result<Attributes> {
-        Attributes::new(self.path())
-    }
-}
-
-trait Iter: Iterator<Item = io::Result<DirEntry>> + Debug {}
-impl<I: Iterator<Item = io::Result<DirEntry>> + Debug> Iter for I {}
-
-/// Iterator over [`Device`] attributes
-///
-/// Created by [`Device::attributes`]
-#[derive(Debug)]
-pub struct Attributes {
-    iter: Box<dyn Iter>,
-}
-
-impl Attributes {
-    fn new(path: &Path) -> io::Result<Self> {
-        Ok(Self {
-            iter: Box::new(
-                path.read_dir()?
-                    // Filter out symlinks and sub-devices
-                    // FIXME: If an attribute subdirectory has permissions
-                    // preventing it from being read, it will incorrectly be skipped.
-                    // The permission error should instead make it to `Attribute::new`
-                    // and be exposed to the user
-                    .filter(|f| {
-                        if let Ok(entry) = f {
-                            let path = entry.path();
-                            !path.is_symlink()
-                                && !(path.is_dir() && path.join("subsystem").exists())
-                        } else {
-                            true
-                        }
-                    })
-                    .filter(|f| {
-                        if let Ok(Ok(ty)) = f.as_ref().map(|f| f.file_type()) {
-                            !ty.is_symlink()
-                        } else {
-                            true
-                        }
-                    })
-                    .filter(|f| {
-                        if let Ok(entry) = f {
-                            let path = entry.path();
-                            path.is_dir() && path.join("subsystem").exists()
-                        } else {
-                            true
-                        }
-                    })
-                    .map(|f| {
-                        //
-                        if let Ok(Ok(ty)) = f.as_ref().map(|f| f.file_type()) {
-                            // ty
-                            f
-                        } else {
-                            f
-                        }
-                    }),
-            ),
-        })
-    }
-
-    fn read(&mut self) -> Option<<Self as Iterator>::Item> {
-        // FIXME: Has to recurse, potentially more than once,
-        // into subdirectories, for sub-attributes.
-        let next = self.iter.next()?;
-
-        Some(next.and_then(|f| Attribute::new(f)))
-    }
-}
-
-impl Iterator for Attributes {
-    type Item = io::Result<Attribute>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.read()
-    }
-}
-
-/// Represents a "raw" [`Device`] attribute
-#[derive(Debug)]
-pub struct Attribute {
-    entry: DirEntry,
-}
-
-impl Attribute {
-    fn new(entry: DirEntry) -> io::Result<Self> {
-        Ok(Self { entry })
-    }
-
-    /// Attribute name
+    /// This list includes directories, which you may not have permission to
+    /// list the contents of.
+    ///
+    /// There may be attributes you do not have permission to see
+    ///
+    /// Use [`Path::strip_prefix`] with [`Device::path`] to get just the
+    /// attribute path
     ///
     /// # Example
     ///
-    /// For an attribute `control` in a subdirectory `power`,
-    /// this will be `power/control`.
-    pub fn name(&self) -> OsString {
-        self.entry.file_name()
+    /// \[`<path>/mq`, `<path>/mq/0`, `<path>/mq/0/cpu_list`]
+    fn attributes(&self) -> io::Result<Vec<PathBuf>> {
+        let mut v = Vec::new();
+        read_attrs(&self.path(), &mut v)?;
+        v.sort_unstable();
+        Ok(v)
     }
-
-    /// If this
-    pub fn attributes(&self) -> io::Result<Option<Attributes>> {
-        Ok(None)
-    }
-}
-
-// impl Read/Write for Attribute
-// ENUM
-// Return Attribute again for subdirectories
-
-pub enum Attr {
-    Attr,
 }
 
 /// A generic linux [`Device`]
@@ -260,9 +191,11 @@ mod tests {
     #[test]
     fn attributes() -> Result<()> {
         let dev = GenericDevice::new("/sys/block/nvme1n1/")?;
-        for attr in dev.attributes()? {
-            dbg!(&attr);
-            dbg!(&attr.map(|a| a.name()));
+        let _ = dbg!(dev.subsystem());
+        let _ = dbg!(dev.driver());
+        for attr in dev.attributes() {
+            // dbg!(&attr);
+            // dbg!(&attr.map(|a| a.name()));
         }
         panic!();
         // Ok(())

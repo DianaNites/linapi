@@ -38,7 +38,7 @@ impl TryFrom<GenericDevice> for Block {
     type Error = io::Error;
 
     fn try_from(dev: GenericDevice) -> Result<Self, Self::Error> {
-        if dev.subsystem() == "block" {
+        if dev.subsystem()? == "block" {
             Ok(Self { path: dev.path })
         } else {
             Err(io::ErrorKind::InvalidInput.into())
