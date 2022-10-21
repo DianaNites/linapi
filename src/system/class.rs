@@ -12,6 +12,7 @@
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
+    fmt::Debug,
     fs::{DirEntry, ReadDir},
     io,
     os::unix::ffi::OsStrExt,
@@ -110,47 +111,78 @@ pub trait Device: Sealed {
     }
 }
 
+trait Iter: Iterator<Item = io::Result<DirEntry>> + Debug {}
+impl<I: Iterator<Item = io::Result<DirEntry>> + Debug> Iter for I {}
+
 /// Iterator over [`Device`] attributes
 ///
 /// Created by [`Device::attributes`]
 #[derive(Debug)]
 pub struct Attributes {
-    iter: ReadDir,
+    iter: Box<dyn Iter>,
 }
 
 impl Attributes {
     fn new(path: &Path) -> io::Result<Self> {
         Ok(Self {
-            iter: path.read_dir()?,
+            iter: Box::new(
+                path.read_dir()?
+                    // Filter out symlinks and sub-devices
+                    // FIXME: If an attribute subdirectory has permissions
+                    // preventing it from being read, it will incorrectly be skipped.
+                    // The permission error should instead make it to `Attribute::new`
+                    // and be exposed to the user
+                    .filter(|f| {
+                        if let Ok(entry) = f {
+                            let path = entry.path();
+                            !path.is_symlink()
+                                && !(path.is_dir() && path.join("subsystem").exists())
+                        } else {
+                            true
+                        }
+                    })
+                    .filter(|f| {
+                        if let Ok(Ok(ty)) = f.as_ref().map(|f| f.file_type()) {
+                            !ty.is_symlink()
+                        } else {
+                            true
+                        }
+                    })
+                    .filter(|f| {
+                        if let Ok(entry) = f {
+                            let path = entry.path();
+                            path.is_dir() && path.join("subsystem").exists()
+                        } else {
+                            true
+                        }
+                    })
+                    .map(|f| {
+                        //
+                        if let Ok(Ok(ty)) = f.as_ref().map(|f| f.file_type()) {
+                            // ty
+                            f
+                        } else {
+                            f
+                        }
+                    }),
+            ),
         })
+    }
+
+    fn read(&mut self) -> Option<<Self as Iterator>::Item> {
+        // FIXME: Has to recurse, potentially more than once,
+        // into subdirectories, for sub-attributes.
+        let next = self.iter.next()?;
+
+        Some(next.and_then(|f| Attribute::new(f)))
     }
 }
 
 impl Iterator for Attributes {
-    type Item = std::io::Result<Attribute>;
+    type Item = io::Result<Attribute>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // FIXME: Has to recurse, potentially more than once,
-        // into subdirectories, for sub-attributes.
-        let next = self
-            .iter
-            .by_ref()
-            // Filter out symlinks and sub-devices
-            // FIXME: If an attribute subdirectory has permissions
-            // preventing it from being read, it will incorrectly be skipped.
-            // The permission error should instead make it to `Attribute::new`
-            // and be exposed to the user
-            .filter(|f| {
-                if let Ok(entry) = f {
-                    let path = entry.path();
-                    !path.is_symlink() && !(path.is_dir() && path.join("subsystem").exists())
-                } else {
-                    true
-                }
-            })
-            .next()?;
-
-        Some(next.and_then(|f| Attribute::new(f)))
+        self.read()
     }
 }
 
@@ -174,10 +206,16 @@ impl Attribute {
     pub fn name(&self) -> OsString {
         self.entry.file_name()
     }
+
+    /// If this
+    pub fn attributes(&self) -> io::Result<Option<Attributes>> {
+        Ok(None)
+    }
 }
 
 // impl Read/Write for Attribute
 // ENUM
+// Return Attribute again for subdirectories
 
 pub enum Attr {
     Attr,
@@ -224,6 +262,7 @@ mod tests {
         let dev = GenericDevice::new("/sys/block/nvme1n1/")?;
         for attr in dev.attributes()? {
             dbg!(&attr);
+            dbg!(&attr.map(|a| a.name()));
         }
         panic!();
         // Ok(())
