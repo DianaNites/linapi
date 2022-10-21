@@ -150,6 +150,11 @@ pub trait Device: Sealed {
         v.sort_unstable();
         Ok(v)
     }
+
+    /// Returns the parent device, if it exists
+    fn parent(&self) -> Option<GenericDevice> {
+        GenericDevice::new(self.path().parent()?).ok()
+    }
 }
 
 /// A generic linux [`Device`]
