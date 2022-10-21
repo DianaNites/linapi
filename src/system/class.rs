@@ -9,12 +9,10 @@
 //!
 //! [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-devices
-#![allow(unused_variables, unused_imports, clippy::all, dead_code)]
 use std::{
-    collections::HashMap,
     ffi::{OsStr, OsString},
     fmt::Debug,
-    fs::{self, DirEntry, ReadDir},
+    fs::{self},
     io,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
@@ -147,7 +145,7 @@ pub trait Device: Sealed {
     /// \[`<path>/mq`, `<path>/mq/0`, `<path>/mq/0/cpu_list`]
     fn attributes(&self) -> io::Result<Vec<PathBuf>> {
         let mut v = Vec::new();
-        read_attrs(&self.path(), &mut v)?;
+        read_attrs(self.path(), &mut v)?;
         v.sort_unstable();
         Ok(v)
     }
@@ -230,7 +228,7 @@ mod tests {
         // let _ = dbg!(dev.subsystem());
         // let _ = dbg!(dev.driver());
         dbg!(dev.path());
-        let mut d = dev.clone();
+        let mut d = dev;
         println!();
         while let Some(dev) = d.parent() {
             dbg!(&dev);
@@ -238,10 +236,10 @@ mod tests {
             println!();
             d = dev;
         }
-        for attr in dev.attributes() {
-            // dbg!(&attr);
-            // dbg!(&attr.map(|a| a.name()));
-        }
+        // for attr in dev.attributes() {
+        //     // dbg!(&attr);
+        //     // dbg!(&attr.map(|a| a.name()));
+        // }
         panic!();
         // Ok(())
     }
