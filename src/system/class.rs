@@ -18,7 +18,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use self::imp::Sealed;
+use self::imp::{read_attrs, Sealed, SYSFS_PATH};
 
 pub mod block;
 
@@ -46,8 +46,13 @@ mod imp {
         }
         Ok(())
     }
+
+    /// Technically Linux requires sysfs to be at `/sys`, calling it a system
+    /// configuration error otherwise.
+    ///
+    /// Use this for testing purposes
+    pub const SYSFS_PATH: &str = "/sys";
 }
-use imp::read_attrs;
 
 /// A kernel "Device"
 ///
@@ -70,11 +75,7 @@ pub trait Device: Sealed {
     ///
     /// `/devices/pci0000:00/0000:00:08.1/0000:08:00.0/drm/card1`
     fn devpath(&self) -> &OsStr {
-        // TODO: This will only work for `/sys`
-        // Yeah yeah linux says its a system configuration error to not have
-        // sysfs at `/sys` but I don't care and will make a distro that has it
-        // elsewhere.
-        OsStr::from_bytes(&self.path().as_os_str().as_bytes()[4..])
+        OsStr::from_bytes(&self.path().as_os_str().as_bytes()[SYSFS_PATH.len()..])
     }
 
     /// Kernel name of the device.
@@ -201,8 +202,7 @@ impl GenericDevice {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let path = path.as_ref().to_path_buf();
         let path = path.canonicalize()?;
-        // FIXME: only works with `/sys`
-        if path.starts_with("/sys/devices") {
+        if path.starts_with(Path::new(SYSFS_PATH).join("devices")) {
             Ok(Self { path })
         } else {
             Err(io::ErrorKind::InvalidInput.into())
