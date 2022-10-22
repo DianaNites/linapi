@@ -131,6 +131,13 @@ impl Pci {
         let modalias = &modalias[..modalias.len() - 1];
         Ok(modalias.to_owned())
     }
+
+    // PCI irq value
+    pub fn irq(&self) -> io::Result<String> {
+        let irq = fs::read_to_string(self.path.join("irq"))?;
+        let irq = &irq[..irq.len() - 1];
+        Ok(irq.to_owned())
+    }
 }
 
 impl Device for Pci {
