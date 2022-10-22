@@ -13,13 +13,62 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Device, GenericDevice};
+use super::{Device, GenericDevice, SYSFS_PATH};
 
 pub struct Pci {
     path: PathBuf,
 }
 
 impl Pci {
+    fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    /// Get connected Block Devices, sorted.
+    ///
+    /// # Note
+    ///
+    /// Partitions are **not** included. Use [`Block::partitions`].
+    ///
+    /// # Errors
+    ///
+    /// - If unable to read any of the subsystem directories.
+    pub fn devices() -> io::Result<Vec<Self>> {
+        let sysfs = Path::new(SYSFS_PATH);
+        let mut devices = Vec::new();
+        // Have to check both paths
+        let paths = if sysfs.join("subsystem").exists() {
+            vec![sysfs.join("subsystem/pci/devices")]
+        } else {
+            vec![sysfs.join("bus/pci/devices"), sysfs.join("class/pci")]
+        };
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+            for dev in path.read_dir()? {
+                let dev = dev?;
+                let path = dev.path();
+                let dev = path.read_link()?;
+                let mut c = dev.components();
+                for p in c.by_ref() {
+                    if p.as_os_str() == "devices" {
+                        break;
+                    }
+                }
+                devices.push(Self::new(
+                    Path::new(SYSFS_PATH).join("devices").join(c.as_path()),
+                ));
+            }
+        }
+        devices.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+        devices.dedup_by(|a, b| a.path == b.path);
+        // Remove sub-devices
+        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
+
+        Ok(devices)
+    }
+
     /// PCI Device Class
     ///
     /// In the form of (Class ID, sub class ID, prog-if ID)
