@@ -24,15 +24,16 @@ impl Pci {
         Self { path }
     }
 
-    /// Get connected Block Devices, sorted.
+    /// Get connected PCI Devices, sorted.
     ///
-    /// # Note
-    ///
-    /// Partitions are **not** included. Use [`Block::partitions`].
+    /// This includes sub-devices?
     ///
     /// # Errors
     ///
     /// - If unable to read any of the subsystem directories.
+    // FIXME: Should it include sub-devices? nothing else does..
+    // Does it actually??
+    // need to add an api to Device that gets sub-devices
     pub fn devices() -> io::Result<Vec<Self>> {
         let sysfs = Path::new(SYSFS_PATH);
         let mut devices = Vec::new();
@@ -61,10 +62,11 @@ impl Pci {
                 ));
             }
         }
+        // devices.sort_unstable_by(|a, b| a.kernel_name().cmp(b.kernel_name()));
         devices.sort_unstable_by(|a, b| a.path.cmp(&b.path));
         devices.dedup_by(|a, b| a.path == b.path);
         // Remove sub-devices
-        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
+        // devices.dedup_by(|a, b| a.path.starts_with(&b.path));
 
         Ok(devices)
     }
