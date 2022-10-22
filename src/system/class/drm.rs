@@ -51,7 +51,7 @@ impl Gpu {
         let paths = if sysfs.join("subsystem").exists() {
             vec![sysfs.join("subsystem/drm/devices")]
         } else {
-            vec![sysfs.join("class/drm"), sysfs.join("bus/drm")]
+            vec![sysfs.join("class/drm"), sysfs.join("bus/drm/devices")]
         };
         for path in paths {
             if !path.exists() {
