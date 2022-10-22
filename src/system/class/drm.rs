@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Device, GenericDevice, SYSFS_PATH};
+use super::{pci::Pci, Device, GenericDevice, SYSFS_PATH};
 
 /// A GPU
 #[derive(Debug, Clone)]
@@ -108,6 +108,22 @@ impl Gpu {
             v.push(Connector::new(path));
         }
         Ok(v)
+    }
+
+    /// The parent PCI device of this GPU
+    ///
+    /// # Errors
+    ///
+    /// If the parent device no longer exists
+    pub fn pci(&self) -> io::Result<Pci> {
+        let mut parent = self.parent();
+        while let Some(dev) = parent {
+            parent = dev.parent();
+            if let Ok(gpu) = dev.try_into() {
+                return Ok(gpu);
+            }
+        }
+        Err(io::ErrorKind::NotFound.into())
     }
 }
 

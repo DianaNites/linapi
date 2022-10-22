@@ -22,6 +22,7 @@ use self::imp::{read_attrs, Sealed, SYSFS_PATH};
 
 pub mod block;
 pub mod drm;
+pub mod pci;
 
 mod imp {
     use super::*;
@@ -31,6 +32,7 @@ mod imp {
     impl Sealed for block::Block {}
     impl Sealed for drm::Gpu {}
     impl Sealed for drm::Connector {}
+    impl Sealed for pci::Pci {}
     impl Sealed for GenericDevice {}
 
     pub fn read_attrs(path: &Path, buf: &mut Vec<PathBuf>) -> io::Result<()> {
