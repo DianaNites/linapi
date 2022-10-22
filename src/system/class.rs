@@ -21,6 +21,7 @@ use std::{
 use self::imp::{read_attrs, Sealed, SYSFS_PATH};
 
 pub mod block;
+pub mod drm;
 
 mod imp {
     use super::*;
@@ -28,6 +29,8 @@ mod imp {
     pub trait Sealed {}
 
     impl Sealed for block::Block {}
+    impl Sealed for drm::Gpu {}
+    impl Sealed for drm::Connector {}
     impl Sealed for GenericDevice {}
 
     pub fn read_attrs(path: &Path, buf: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -151,9 +154,13 @@ pub trait Device: Sealed {
     }
 
     /// Returns the parent device, if it exists
+    ///
+    /// Errors traversing the chain are coerced to [`None`]
     fn parent(&self) -> Option<GenericDevice> {
         let mut parent = self.path().parent();
         while let Some(path) = parent {
+            // FIXME: Probably should be try_exists?
+            // Expose errors?
             if path.join("subsystem").exists() {
                 return GenericDevice::new(path).ok();
             }
