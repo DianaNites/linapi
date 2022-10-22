@@ -74,6 +74,7 @@ impl Pci {
     /// In the form of (Class ID, sub class ID, prog-if ID)
     pub fn class(&self) -> io::Result<(String, String, String)> {
         let class_id = fs::read_to_string(self.path.join("class"))?;
+        let class_id = &class_id[2..8];
         Ok((
             class_id[..2].to_owned(),
             class_id[2..4].to_owned(),
