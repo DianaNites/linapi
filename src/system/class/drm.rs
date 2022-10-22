@@ -98,10 +98,7 @@ impl Gpu {
             let path = dir.path();
             let name = dir.file_name();
             let name = name.to_str().expect("invalid utf-8 in drm kernel names");
-            let kernel_name = self
-                .kernel_name()
-                .to_str()
-                .expect("invalid utf-8 in kernel name");
+            let kernel_name = self.kernel_name();
             if !name.starts_with(kernel_name) {
                 continue;
             }
@@ -180,10 +177,7 @@ impl Connector {
     /// If the connector is at `/sys/class/drm/card0/card0-DP-1`, this will
     /// return `DP-1`
     pub fn name(&self) -> &str {
-        let name = self
-            .kernel_name()
-            .to_str()
-            .expect("invalid utf-8 in kernel name");
+        let name = self.kernel_name();
         let (_, name) = name.split_once('-').expect("invalid connector name");
         name
     }

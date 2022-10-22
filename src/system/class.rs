@@ -10,7 +10,7 @@
 //! [1]: https://www.kernel.org/doc/html/latest/admin-guide/sysfs-rules.html
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-devices
 use std::{
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fmt::Debug,
     fs::{self},
     io,
@@ -78,8 +78,10 @@ pub trait Device: Sealed {
     /// # Example
     ///
     /// `/devices/pci0000:00/0000:00:08.1/0000:08:00.0/drm/card1`
-    fn devpath(&self) -> &OsStr {
+    fn devpath(&self) -> &str {
         OsStr::from_bytes(&self.path().as_os_str().as_bytes()[SYSFS_PATH.len()..])
+            .to_str()
+            .expect("devpath cannot be invalid utf-8")
     }
 
     /// Kernel name of the device.
@@ -89,8 +91,12 @@ pub trait Device: Sealed {
     /// # Example
     ///
     /// `card1`
-    fn kernel_name(&self) -> &OsStr {
-        self.path().file_name().expect("devpath cannot end in ..")
+    fn kernel_name(&self) -> &str {
+        self.path()
+            .file_name()
+            .expect("devpath cannot end in ..")
+            .to_str()
+            .expect("kernel_name cannot be invalid utf-8")
     }
 
     /// Kernel subsystem
@@ -103,14 +109,16 @@ pub trait Device: Sealed {
     /// # Example
     ///
     /// `drm`
-    fn subsystem(&self) -> io::Result<OsString> {
+    fn subsystem(&self) -> io::Result<String> {
         Ok(self
             .path()
             .join("subsystem")
             .read_link()?
             .file_name()
             .expect("subsystem cannot end in ..")
-            .to_os_string())
+            .to_str()
+            .expect("subsystem cannot be invalid utf-8")
+            .to_owned())
     }
 
     /// Driver for this device
@@ -126,12 +134,14 @@ pub trait Device: Sealed {
     /// # Example
     ///
     /// `drm`
-    fn driver(&self) -> io::Result<Option<OsString>> {
+    fn driver(&self) -> io::Result<Option<String>> {
         self.subsystem()?;
         Ok(self.path().join("driver").read_link().ok().map(|f| {
             f.file_name()
                 .expect("driver cannot end in ..")
-                .to_os_string()
+                .to_str()
+                .expect("driver cannot be invalid utf-8")
+                .to_owned()
         }))
     }
 
