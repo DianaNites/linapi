@@ -124,6 +124,13 @@ impl Pci {
             Ok(None)
         }
     }
+
+    /// PCI Modalias value
+    pub fn modalias(&self) -> io::Result<String> {
+        let modalias = fs::read_to_string(self.path.join("modalias"))?;
+        let modalias = &modalias[..modalias.len() - 1];
+        Ok(modalias.to_owned())
+    }
 }
 
 impl Device for Pci {
