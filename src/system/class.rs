@@ -171,7 +171,7 @@ pub trait Device: Sealed {
 
     /// Returns the (major, minor) numbers of the device file for this device,
     /// if they exist.
-    fn dev(&self) -> io::Result<Option<(u32, u32)>> {
+    fn dev(&self) -> io::Result<Option<(u64, u64)>> {
         let dev = self.path().join("dev");
         if !dev.try_exists()? {
             return Ok(None);
@@ -183,10 +183,10 @@ pub trait Device: Sealed {
         let minor = i.next().ok_or(io::ErrorKind::InvalidInput)?;
 
         let major = major
-            .parse::<u32>()
+            .parse::<u64>()
             .map_err(|_| io::ErrorKind::InvalidInput)?;
         let minor = minor
-            .parse::<u32>()
+            .parse::<u64>()
             .map_err(|_| io::ErrorKind::InvalidInput)?;
 
         Ok(Some((major, minor)))
