@@ -11,7 +11,6 @@ use std::{
     time::Duration,
 };
 
-use bitflags::bitflags;
 use displaydoc::Display;
 use nix::sys::stat;
 use thiserror::Error;
@@ -88,59 +87,9 @@ fn dev_size(path: &Path) -> Result<u64> {
         .map_err(|_| Error::Invalid)
 }
 
-bitflags! {
-    /// Flags corresponding to [`Block::capability`].
-    ///
-    /// See the [linux kernel docs][1] for details.
-    ///
-    /// # Note
-    ///
-    /// Most of these seem to officially be undocumented.
-    /// They will be documented here on a best-effort basis.
-    ///
-    /// [1]: https://www.kernel.org/doc/html/latest/block/capability.html
-    pub struct BlockCap: u32 {
-        /// Set for removable media with permanent block devices
-        ///
-        /// Unset for removable block devices with permanent media
-        const REMOVABLE = 1;
-
-        /// Block Device supports Asynchronous Notification of media change events.
-        /// These events will be broadcast to user space via kernel uevent.
-        const MEDIA_CHANGE_NOTIFY = 4;
-
-        /// CD-like
-        const CD = 8;
-
-        /// Alive, online, active.
-        const UP = 16;
-
-        /// Doesn't appear in `/proc/partitions`
-        const SUPPRESS_PARTITION_INFO = 32;
-
-        /// Unknown
-        const EXT_DEVT = 64;
-
-        /// Unknown
-        const NATIVE_CAPACITY = 128;
-
-        /// Unknown
-        const BLOCK_EVENTS_ON_EXCL_WRITE = 256;
-
-        /// Unknown
-        const NO_PART_SCAN = 512;
-
-        /// Unknown
-        const HIDDEN = 1024;
-    }
-}
-
 /// A Block Device
 #[derive(Debug, Clone)]
 pub struct Block {
-    /// Kernel name
-    name: String,
-
     /// Canonical, full, path to the device.
     path: PathBuf,
 
@@ -153,46 +102,6 @@ pub struct Block {
 
 // Public
 impl Block {
-    /// Get connected Block Devices.
-    ///
-    /// # Note
-    ///
-    /// Partitions are **not** included. Use [`Block::partitions`].
-    ///
-    /// The returned Vec is sorted by kernel name.
-    ///
-    /// # Errors
-    ///
-    /// - [`Error::Io`] for I/O errors
-    pub fn get_connected() -> Result<Vec<Self>> {
-        let sysfs = Path::new(SYSFS_PATH);
-        let mut devices = Vec::new();
-        // Per linux sysfs-rules, if /sys/subsystem exists, class should be ignored.
-        // If it doesn't exist, both places need scanning.
-        let mut paths = vec![sysfs.join("subsystem/block/devices")];
-        if !paths[0].exists() {
-            paths = vec![sysfs.join("class/block"), sysfs.join("block")];
-        }
-        for path in paths {
-            if !path.exists() {
-                continue;
-            }
-            for dev in path.read_dir()? {
-                let dev: DirEntry = dev?;
-                // Skip partitions. Note that this attribute is undocumented.
-                if dev.path().join("partition").exists() {
-                    continue;
-                }
-                devices.push(Self::new(dev.path().canonicalize()?)?);
-            }
-        }
-        // FIXME: Better way to prevent duplicates than this?
-        // Ok to only search one of `/sys/class/block` and `/sys/block`?
-        devices.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-        devices.dedup_by(|a, b| a.name == b.name);
-        Ok(devices)
-    }
-
     /// Create from a device file in `/dev`
     ///
     /// # Errors
@@ -216,24 +125,9 @@ impl Block {
         Self::new(path)
     }
 
-    /// Canonical path to the block device.
-    ///
-    /// You normally shouldn't need this, but it could be useful if
-    /// you want to manually access information not exposed by this crate.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Path to the device *file*, usually in `/dev`.
     pub fn dev_path(&self) -> Result<Option<PathBuf>> {
         find_from_major_minor(self.major, self.minor)
-    }
-
-    /// Kernel name for this device.
-    ///
-    /// This does not have to match whats in `/dev`
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     /// Get this devices partitions, if any.
@@ -270,38 +164,6 @@ impl Block {
             )),
             None => Ok(None),
         }
-    }
-
-    /// Device major number
-    pub fn major(&self) -> u64 {
-        self.major
-    }
-
-    /// Device minor number
-    pub fn minor(&self) -> u64 {
-        self.minor
-    }
-
-    /// Get the byte size of the device, if possible.
-    pub fn size(&self) -> Result<u64> {
-        dev_size(&self.path)
-    }
-
-    /// Get device capabilities.
-    ///
-    /// Unknown flags *are* preserved
-    ///
-    /// See [`BlockCap`] for more details.
-    pub fn capability(&self) -> Result<BlockCap> {
-        // Unknown bits are safe, and the kernel may add new flags.
-        Ok(unsafe {
-            BlockCap::from_bits_unchecked(
-                std::fs::read_to_string(self.path.join("capability"))?
-                    .trim()
-                    .parse()
-                    .map_err(|_| Error::Invalid)?,
-            )
-        })
     }
 
     /// Get device power information
@@ -413,16 +275,7 @@ impl Block {
 impl Block {
     fn new(path: PathBuf) -> Result<Self> {
         let (major, minor) = parse_dev(&path)?;
-        Ok(Self {
-            name: path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .map(Into::into)
-                .unwrap(),
-            path,
-            major,
-            minor,
-        })
+        Ok(Self { path, major, minor })
     }
 }
 

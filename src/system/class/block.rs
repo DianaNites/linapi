@@ -13,11 +13,68 @@
 use std::{
     convert::TryFrom,
     fs,
-    io,
+    io::{self, ErrorKind},
     path::{Path, PathBuf},
 };
 
 use super::{Device, GenericDevice, SYSFS_PATH};
+
+fn dev_size(path: &Path) -> io::Result<u64> {
+    Ok(fs::read_to_string(path.join("size"))?
+        .trim()
+        .parse::<u64>()
+        // Per [this][1] forgotten 2015 patch, this is in 512 byte sectors.
+        // [1]: https://lore.kernel.org/lkml/1451154995-4686-1-git-send-email-peter@lekensteyn.nl/
+        .map(|b| b * 512)
+        .map_err(|_| ErrorKind::InvalidData)?)
+}
+
+bitflags::bitflags! {
+    /// Flags corresponding to [`Block::capability`].
+    ///
+    /// See the [linux kernel docs][1] for details.
+    ///
+    /// # Note
+    ///
+    /// Most of these seem to officially be undocumented.
+    /// They will be documented here on a best-effort basis.
+    ///
+    /// [1]: https://www.kernel.org/doc/html/latest/block/capability.html
+    pub struct BlockCap: u32 {
+        /// Set for removable media with permanent block devices
+        ///
+        /// Unset for removable block devices with permanent media
+        const REMOVABLE = 1;
+
+        /// Block Device supports Asynchronous Notification of media change events.
+        /// These events will be broadcast to user space via kernel uevent.
+        const MEDIA_CHANGE_NOTIFY = 4;
+
+        /// CD-like
+        const CD = 8;
+
+        /// Alive, online, active.
+        const UP = 16;
+
+        /// Doesn't appear in `/proc/partitions`
+        const SUPPRESS_PARTITION_INFO = 32;
+
+        /// Unknown
+        const EXT_DEVT = 64;
+
+        /// Unknown
+        const NATIVE_CAPACITY = 128;
+
+        /// Unknown
+        const BLOCK_EVENTS_ON_EXCL_WRITE = 256;
+
+        /// Unknown
+        const NO_PART_SCAN = 512;
+
+        /// Unknown
+        const HIDDEN = 1024;
+    }
+}
 
 /// A linux block device
 #[derive(Debug, Clone)]
@@ -94,6 +151,28 @@ impl Block {
             parent = dev.parent();
         }
         Ok(None)
+    }
+
+    /// Get device capabilities.
+    ///
+    /// Unknown flags *are* preserved
+    ///
+    /// See [`BlockCap`] for more details.
+    pub fn capability(&self) -> io::Result<BlockCap> {
+        // SAFETY: Bitflags is broken and uses unsafe incorrectly. this is always safe.
+        unsafe {
+            Ok(BlockCap::from_bits_unchecked(
+                std::fs::read_to_string(self.path.join("capability"))?
+                    .trim()
+                    .parse()
+                    .map_err(|_| ErrorKind::InvalidData)?,
+            ))
+        }
+    }
+
+    /// Get the byte size of the device, if possible.
+    pub fn size(&self) -> io::Result<u64> {
+        dev_size(&self.path)
     }
 }
 
