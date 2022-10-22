@@ -113,6 +113,17 @@ impl Pci {
         let revision = fs::read_to_string(self.path.join("subsystem_device"))?;
         Ok(revision[2..6].to_owned())
     }
+
+    /// Firmware name of the device, if it exists.
+    pub fn label(&self) -> io::Result<Option<String>> {
+        let label = self.path().join("label");
+        if label.try_exists()? {
+            let label = fs::read_to_string(label)?;
+            Ok(Some(label[..label.len() - 1].to_owned()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl Device for Pci {
