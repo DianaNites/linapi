@@ -18,8 +18,7 @@ mod _impl {
     use std::{convert::TryInto, marker::PhantomData, mem};
 
     use nix::{
-        ioctl_none,
-        ioctl_write_ptr_bad,
+        ioctl_none, ioctl_write_ptr_bad,
         libc::{c_char, c_int, c_longlong, c_void},
     };
 
