@@ -8,7 +8,8 @@
 //! Much of the interface depends on the GPU driver
 
 use std::{
-    fs, io,
+    fs,
+    io,
     path::{Path, PathBuf},
 };
 
