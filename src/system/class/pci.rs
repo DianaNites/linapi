@@ -118,8 +118,9 @@ impl Pci {
     pub fn label(&self) -> io::Result<Option<String>> {
         let label = self.path().join("label");
         if label.try_exists()? {
-            let label = fs::read_to_string(label)?;
-            Ok(Some(label[..label.len() - 1].to_owned()))
+            let mut label = fs::read_to_string(label)?;
+            label.pop();
+            Ok(Some(label))
         } else {
             Ok(None)
         }
@@ -127,16 +128,16 @@ impl Pci {
 
     /// PCI Modalias value
     pub fn modalias(&self) -> io::Result<String> {
-        let modalias = fs::read_to_string(self.path.join("modalias"))?;
-        let modalias = &modalias[..modalias.len() - 1];
-        Ok(modalias.to_owned())
+        let mut modalias = fs::read_to_string(self.path.join("modalias"))?;
+        modalias.pop();
+        Ok(modalias)
     }
 
     // PCI irq value
     pub fn irq(&self) -> io::Result<String> {
-        let irq = fs::read_to_string(self.path.join("irq"))?;
-        let irq = &irq[..irq.len() - 1];
-        Ok(irq.to_owned())
+        let mut irq = fs::read_to_string(self.path.join("irq"))?;
+        irq.pop();
+        Ok(irq)
     }
 }
 
