@@ -24,8 +24,12 @@ flate2 = { version = "1.0.24", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.11.2", optional = true }
 anyhow = "1.0.66"
-rustix = { version = "0.35.11", features = ["fs"] }
-syscalls = { version = "0.6.7", default-features = false, features = ["std"] }
+rustix = { version = "0.35.11", default-features = false, features = [
+    "std",
+    "fs",
+    "process",
+] }
+# syscalls = { version = "0.6.7", default-features = false, features = ["std"] }
 # flagset = "0.4.3"
 # io-lifetimes = "0.7.3"
 

@@ -26,3 +26,30 @@ pub trait UEvent {
 }
 
 pub mod class;
+
+use rustix::process::{uname as r_uname, Uname as RUname};
+
+/// Uname struct
+pub struct Uname(RUname);
+
+impl Uname {
+    /// System name
+    pub fn sys_name(&self) -> &str {
+        self.0.sysname().to_str().expect("non-ascii uname")
+    }
+
+    /// OS release version
+    pub fn release(&self) -> &str {
+        self.0.release().to_str().expect("non-ascii uname")
+    }
+
+    /// Hardware architecture
+    pub fn machine(&self) -> &str {
+        self.0.machine().to_str().expect("non-ascii uname")
+    }
+}
+
+/// Uname
+pub fn uname() -> Uname {
+    Uname(r_uname())
+}
