@@ -36,9 +36,9 @@ rustix = { version = "0.35.11", default-features = false, features = [
 [features]
 default = ["compression"]
 compression = ["xz", "gz", "zst"]
-xz = ["xz2"]
-gz = ["flate2"]
-zst = ["zstd"]
+xz = ["dep:xz2"]
+gz = ["dep:flate2"]
+zst = ["dep:zstd"]
 
 [badges]
 maintenance = { status = "experimental" }
