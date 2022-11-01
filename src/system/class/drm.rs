@@ -108,6 +108,7 @@ impl TryFrom<GenericDevice> for Gpu {
     }
 }
 
+/// A connector, attached to a GPU.
 #[derive(Debug, Clone)]
 pub struct Connector {
     path: PathBuf,
