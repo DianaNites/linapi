@@ -8,7 +8,8 @@
 //! Much of the interface depends on the GPU driver
 
 use std::{
-    fs, io,
+    fs,
+    io,
     path::{Path, PathBuf},
 };
 
@@ -44,45 +45,11 @@ impl Gpu {
     ///
     /// - If unable to read any of the subsystem directories.
     pub fn devices() -> io::Result<Vec<Self>> {
-        let sysfs = Path::new(SYSFS_PATH);
-        let mut devices = Vec::new();
-        // Have to check both paths
-        let paths = if sysfs.join("subsystem").exists() {
-            vec![sysfs.join("subsystem/drm/devices")]
-        } else {
-            vec![sysfs.join("class/drm"), sysfs.join("bus/drm/devices")]
-        };
-        for path in paths {
-            if !path.exists() {
-                continue;
-            }
-            for dev in path.read_dir()? {
-                let dev = dev?;
-                let path = dev.path();
-                let name = dev.file_name();
-                let name = name.to_str().expect("invalid utf-8 in drm kernel names");
-                let ty = dev.file_type()?;
-                if !ty.is_symlink() || name.starts_with("render") {
-                    continue;
-                }
-                let dev = path.read_link()?;
-                let mut c = dev.components();
-                for p in c.by_ref() {
-                    if p.as_os_str() == "devices" {
-                        break;
-                    }
-                }
-                devices.push(Self::new(
-                    Path::new(SYSFS_PATH).join("devices").join(c.as_path()),
-                ));
-            }
-        }
-        devices.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-        devices.dedup_by(|a, b| a.path == b.path);
-        // Remove sub-devices, connectors in this context.
-        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
-
-        Ok(devices)
+        Ok(GenericDevice::devices("drm")?
+            .into_iter()
+            .filter(|d| !d.kernel_name().starts_with("render"))
+            .map(|d| Self::new(d.path))
+            .collect())
     }
 
     /// Get connectors for this GPU
