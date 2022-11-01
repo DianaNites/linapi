@@ -9,7 +9,6 @@
 //!
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-block
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-block
-#![allow(unused_variables, unused_imports, clippy::all, dead_code, unused_mut)]
 use std::{
     convert::TryFrom,
     fs,
@@ -17,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Device, GenericDevice, SYSFS_PATH};
+use super::{Device, GenericDevice};
 
 fn dev_size(path: &Path) -> io::Result<u64> {
     Ok(fs::read_to_string(path.join("size"))?

@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Device, GenericDevice, SYSFS_PATH};
+use super::{Device, GenericDevice};
 
 #[derive(Debug, Clone)]
 pub struct Pci {
