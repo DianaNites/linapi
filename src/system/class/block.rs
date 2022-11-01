@@ -98,39 +98,10 @@ impl Block {
     ///
     /// - If unable to read any of the subsystem directories.
     pub fn devices() -> io::Result<Vec<Self>> {
-        let sysfs = Path::new(SYSFS_PATH);
-        let mut devices = Vec::new();
-        // Have to check both paths
-        let paths = if sysfs.join("subsystem").exists() {
-            vec![sysfs.join("subsystem/block/devices")]
-        } else {
-            vec![sysfs.join("class/block"), sysfs.join("block")]
-        };
-        for path in paths {
-            if !path.exists() {
-                continue;
-            }
-            for dev in path.read_dir()? {
-                let dev = dev?;
-                let path = dev.path();
-                let dev = path.read_link()?;
-                let mut c = dev.components();
-                for p in c.by_ref() {
-                    if p.as_os_str() == "devices" {
-                        break;
-                    }
-                }
-                devices.push(Self::new(
-                    Path::new(SYSFS_PATH).join("devices").join(c.as_path()),
-                ));
-            }
-        }
-        devices.sort_unstable_by(|a: &Block, b| a.path.cmp(&b.path));
-        devices.dedup_by(|a, b| a.path == b.path);
-        // Remove sub-devices, partitions in this context.
-        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
-
-        Ok(devices)
+        Ok(GenericDevice::devices("block")?
+            .into_iter()
+            .map(|d| Block::new(d.path))
+            .collect())
     }
 
     /// Get device model, if it exists.
@@ -221,7 +192,7 @@ mod tests {
     #[test]
     fn devices() -> Result<()> {
         let devices = Block::devices();
-        // dbg!(&devices);
+        dbg!(&devices);
         for device in devices? {
             dbg!(&device.model());
         }

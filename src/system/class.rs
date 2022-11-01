@@ -106,7 +106,7 @@ impl<'a> Iterator for Children<'a> {
             if !meta.is_symlink() {
                 continue;
             }
-            return Some(GenericDevice::new(path));
+            return Some(Ok(GenericDevice::new_unchecked(path)));
         }
         None
     }
@@ -287,6 +287,69 @@ impl GenericDevice {
         } else {
             Err(io::ErrorKind::InvalidInput.into())
         }
+    }
+
+    /// Create a new [`Device`] from `path', which must be canonical.
+    fn new_unchecked<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref().to_path_buf();
+        Self { path }
+    }
+
+    /// Get connected `subsystem` Devices, sorted.
+    ///
+    /// # Note
+    ///
+    /// Child devices are **not** included. Use [`Device::children`].
+    ///
+    /// This **will** expose devices that you don't have permission to see.
+    ///
+    /// # Errors
+    ///
+    /// - If unable to read any of the subsystem directories.
+    pub fn devices(subsystem: &str) -> io::Result<Vec<Self>> {
+        if subsystem.contains('/') {
+            return Err(io::ErrorKind::InvalidInput.into());
+        }
+        let sysfs = Path::new(SYSFS_PATH);
+        let mut devices = Vec::new();
+        let paths = if sysfs.join("subsystem").exists() {
+            vec![sysfs.join("subsystem").join(subsystem).join("devices")]
+        } else if subsystem == "block" {
+            // block is weird.
+            vec![sysfs.join("class/block"), sysfs.join("block")]
+        } else {
+            vec![
+                sysfs.join("subsystem").join(subsystem).join("devices"),
+                sysfs.join("class").join(subsystem),
+            ]
+        };
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+            for dev in path.read_dir()? {
+                let dev = dev?;
+                let path = dev.path();
+                let dev = path.read_link()?;
+                let mut c = dev.components();
+                for p in c.by_ref() {
+                    if p.as_os_str() == "devices" {
+                        break;
+                    }
+                }
+                // This dance around paths is required because
+                // Path::canonicalize will error if, say, permissions aren't right.
+                // We want to expose devices that you dont have permission to access
+                devices.push(Self::new_unchecked(
+                    Path::new(SYSFS_PATH).join("devices").join(c.as_path()),
+                ));
+            }
+        }
+        devices.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+        devices.dedup_by(|a, b| a.path == b.path);
+        // Remove sub-devices
+        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
+        Ok(devices)
     }
 }
 
