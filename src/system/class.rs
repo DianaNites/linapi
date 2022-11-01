@@ -287,17 +287,12 @@ impl GenericDevice {
         }
     }
 
-    /// Create a new [`Device`] from `path', which must be canonical.
-    fn new_unchecked<P: AsRef<Path>>(path: P) -> Self {
-        let path = path.as_ref().to_path_buf();
-        Self { path }
-    }
-
     /// Get connected `subsystem` Devices, sorted.
     ///
     /// # Note
     ///
-    /// Child devices are **not** included. Use [`Device::children`].
+    /// Child devices are **not** included.
+    /// Use [`Device::children`] or [`GenericDevice::all_devices`].
     ///
     /// This **will** expose devices that you don't have permission to see.
     ///
@@ -305,6 +300,21 @@ impl GenericDevice {
     ///
     /// - If unable to read any of the subsystem directories.
     pub fn devices(subsystem: &str) -> io::Result<Vec<Self>> {
+        Self::devices_inner(subsystem, false)
+    }
+
+    /// The same as [`GenericDevice::devices`], but includes child devices.
+    pub fn all_devices(subsystem: &str) -> io::Result<Vec<Self>> {
+        Self::devices_inner(subsystem, true)
+    }
+
+    /// Create a new [`Device`] from `path', which must be canonical.
+    fn new_unchecked<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref().to_path_buf();
+        Self { path }
+    }
+
+    fn devices_inner(subsystem: &str, children: bool) -> io::Result<Vec<Self>> {
         if subsystem.contains('/') {
             return Err(io::ErrorKind::InvalidInput.into());
         }
@@ -346,7 +356,9 @@ impl GenericDevice {
         devices.sort_unstable_by(|a, b| a.path.cmp(&b.path));
         devices.dedup_by(|a, b| a.path == b.path);
         // Remove sub-devices
-        devices.dedup_by(|a, b| a.path.starts_with(&b.path));
+        if !children {
+            devices.dedup_by(|a, b| a.path.starts_with(&b.path));
+        }
         Ok(devices)
     }
 }
