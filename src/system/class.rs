@@ -60,21 +60,19 @@ mod imp {
 
 /// Iterator over child devices
 #[derive(Debug)]
-pub struct Children<'a> {
-    _path: &'a Path,
+pub struct Children {
     iter: fs::ReadDir,
 }
 
-impl<'a> Children<'a> {
-    fn new(path: &'a Path) -> io::Result<Self> {
+impl Children {
+    fn new(path: &Path) -> io::Result<Self> {
         Ok(Self {
-            _path: path,
             iter: path.read_dir()?,
         })
     }
 }
 
-impl<'a> Iterator for Children<'a> {
+impl Iterator for Children {
     type Item = io::Result<GenericDevice>;
 
     fn next(&mut self) -> Option<Self::Item> {
