@@ -319,7 +319,7 @@ impl GenericDevice {
             vec![sysfs.join("class/block"), sysfs.join("block")]
         } else {
             vec![
-                sysfs.join("subsystem").join(subsystem).join("devices"),
+                sysfs.join("bus").join(subsystem).join("devices"),
                 sysfs.join("class").join(subsystem),
             ]
         };
