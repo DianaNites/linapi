@@ -338,6 +338,11 @@ impl GenericDevice {
             for dev in path.read_dir()? {
                 let dev = dev?;
                 let path = dev.path();
+                let ty = dev.file_type()?;
+                // Some subsystems, like drm, have normal files in them.
+                if !ty.is_symlink() {
+                    continue;
+                }
                 let dev = path.read_link()?;
                 let mut c = dev.components();
                 for p in c.by_ref() {
