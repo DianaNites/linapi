@@ -58,6 +58,60 @@ mod imp {
     pub const SYSFS_PATH: &str = "/sys";
 }
 
+/// Iterator over child devices
+#[derive(Debug)]
+pub struct Children<'a> {
+    _path: &'a Path,
+    iter: fs::ReadDir,
+}
+
+impl<'a> Children<'a> {
+    fn new(path: &'a Path) -> io::Result<Self> {
+        Ok(Self {
+            _path: path,
+            iter: path.read_dir()?,
+        })
+    }
+}
+
+impl<'a> Iterator for Children<'a> {
+    type Item = io::Result<GenericDevice>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for dev in &mut self.iter {
+            let dev = match dev {
+                Ok(d) => d,
+                Err(e) => return Some(Err(e)),
+            };
+            let path = dev.path();
+            let typ = match dev.file_type() {
+                Ok(t) => t,
+                Err(e) => return Some(Err(e)),
+            };
+            if !typ.is_dir() {
+                continue;
+            }
+            let sub = path.join("subsystem");
+            let exists = match sub.try_exists() {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e)),
+            };
+            if !exists {
+                continue;
+            }
+            let meta = match sub.symlink_metadata() {
+                Ok(m) => m,
+                Err(e) => return Some(Err(e)),
+            };
+            if !meta.is_symlink() {
+                continue;
+            }
+            return Some(GenericDevice::new(path));
+        }
+        None
+    }
+}
+
 /// A kernel "Device"
 ///
 /// Exposes the lower level information underlying every kernel device
@@ -202,6 +256,14 @@ pub trait Device: Sealed {
             .map_err(|_| io::ErrorKind::InvalidInput)?;
 
         Ok(Some((major, minor)))
+    }
+
+    /// Returns an iterator over child devices
+    ///
+    /// A "child device" is any subdirectory that is not a symlink and
+    /// has a subsystem.
+    fn children(&self) -> io::Result<Children> {
+        Children::new(self.path())
     }
 }
 

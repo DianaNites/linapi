@@ -202,6 +202,23 @@ mod tests {
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
     #[test]
+    fn children() -> Result<()> {
+        let devices = Block::devices();
+        // dbg!(&devices);
+        for device in devices? {
+            // dbg!(&device.model());
+            dbg!(&device);
+            for child in device.children()? {
+                let child = child?;
+                dbg!(&child);
+            }
+            eprintln!("----\n");
+        }
+        panic!();
+        Ok(())
+    }
+
+    #[test]
     fn devices() -> Result<()> {
         let devices = Block::devices();
         // dbg!(&devices);
