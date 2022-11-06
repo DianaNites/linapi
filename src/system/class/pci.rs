@@ -15,6 +15,8 @@ use std::{
 
 use super::{Device, GenericDevice};
 
+// TODO: Make this a trait
+// Allow structs for specific PCI devices, like AMD gpus
 #[derive(Debug, Clone)]
 pub struct Pci {
     path: PathBuf,
