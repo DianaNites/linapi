@@ -672,31 +672,31 @@ impl ModuleFile {
         {
             let name: Option<String> = name;
             let typ: Option<String> = typ;
+
             // Types are reasonably guaranteed to exist because
             // `linux/moduleparam.h` adds them for all the `module_param`
             // macros, which define parameters.
+            // FIXME: loop module param hw_queue_depth has no type
             let name = name.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
             let typ = typ.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
+
             // Parameters should not have multiple types.
             if x.insert(name, (typ, None)).is_some() {
                 return Err(ModuleError::InvalidModule(MODINFO.into()));
             };
         }
+
         for (name, desc) in map.remove("parm").unwrap_or_default().into_iter().map(|s| {
             let mut i = s.splitn(2, ':').map(|s| s.trim().to_owned());
             (i.next(), i.next())
         }) {
             let name: Option<String> = name;
             let desc: Option<String> = desc;
-            //
+
             let name = name.ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
-            // If we've seen the parameter, which we should have it's probably a
-            // module bug otherwise, add it's description.
-            //
-            // Parameters aren't required to have descriptions.
-            x.get_mut(&name)
-                .map(|v| v.1 = desc)
-                .ok_or_else(|| ModuleError::InvalidModule(MODINFO.into()))?;
+
+            // Add parameter descriptions
+            x.entry(name).or_insert(("Unknown".into(), None)).1 = desc;
         }
         let mut parameters = Vec::new();
         for (name, (type_, description)) in x {

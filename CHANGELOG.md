@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Failure to read module parameters without types, such as `loop`
+
 ## [0.5.2] - 2021-07-23
 
 ### Added
