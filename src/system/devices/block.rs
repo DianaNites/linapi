@@ -1,11 +1,4 @@
 //! This module provides ways to get information about connected Block devices
-use crate::{
-    extensions::FileExt,
-    util::{DEV_PATH, SYSFS_PATH},
-};
-use bitflags::bitflags;
-use displaydoc::Display;
-use nix::sys::stat;
 use std::{
     convert::TryInto,
     fs,
@@ -17,7 +10,16 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+use bitflags::bitflags;
+use displaydoc::Display;
+use nix::sys::stat;
 use thiserror::Error;
+
+use crate::{
+    extensions::FileExt,
+    util::{DEV_PATH, SYSFS_PATH},
+};
 
 /// Block Error type
 #[derive(Debug, Display, Error)]
@@ -413,12 +415,10 @@ impl Block {
     ///
     /// This is usually 512
     pub fn logical_block_size(&self) -> Result<u64> {
-        Ok(
-            fs::read_to_string(self.path.join("queue/logical_block_size"))?
-                .trim()
-                .parse::<u64>()
-                .map_err(|_| Error::Invalid)?,
-        )
+        fs::read_to_string(self.path.join("queue/logical_block_size"))?
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| Error::Invalid)
     }
 }
 
@@ -723,12 +723,10 @@ macro_rules! wakeup_helper {
     ($(#[$outer:meta])* $name:ident, $file:literal) => {
         impl Wakeup<'_> {
             pub fn $name(&self) -> Result<u32> {
-                Ok(
-                    fs::read_to_string(self.path.join(concat!("power/", $file)))?
-                        .trim()
-                        .parse::<u32>()
-                        .map_err(|_| Error::Invalid)?,
-                )
+                fs::read_to_string(self.path.join(concat!("power/", $file)))?
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| Error::Invalid)
             }
         }
     };

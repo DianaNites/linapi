@@ -35,18 +35,6 @@
 //!
 //! [1]: https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-module
 //! [2]: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-module
-use crate::{
-    error::{text::*, ModuleError},
-    extensions::FileExt,
-    system::{UEvent, UEventAction},
-    util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
-};
-#[cfg(feature = "gz")]
-use flate2::bufread::GzDecoder;
-use nix::{
-    kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
-    sys::utsname::uname,
-};
 use std::{
     collections::HashMap,
     ffi::CString,
@@ -55,12 +43,26 @@ use std::{
     io::{prelude::*, BufRead},
     path::{Path, PathBuf},
 };
+
+#[cfg(feature = "gz")]
+use flate2::bufread::GzDecoder;
+use nix::{
+    kmod::{delete_module, finit_module, init_module, DeleteModuleFlags, ModuleInitFlags},
+    sys::utsname::uname,
+};
 use walkdir::WalkDir;
 use xmas_elf::ElfFile;
 #[cfg(feature = "xz")]
 use xz2::bufread::XzDecoder;
 #[cfg(feature = "zst")]
 use zstd::stream::read::Decoder as ZstDecoder;
+
+use crate::{
+    error::{text::*, ModuleError},
+    extensions::FileExt,
+    system::{UEvent, UEventAction},
+    util::{read_uevent, write_uevent, MODULE_PATH, SYSFS_PATH},
+};
 
 const SIGNATURE_MAGIC: &[u8] = b"~Module signature appended~\n";
 
@@ -487,7 +489,7 @@ impl ModuleFile {
                 .path()
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .and_then(|s| s.splitn(2, '.').next())
+                .and_then(|s| s.split('.').next())
                 .ok_or_else(|| ModuleError::InvalidModule(INVALID_EXTENSION.into()))?;
             if m_name == name {
                 let mut s = Self {
@@ -557,9 +559,7 @@ impl ModuleFile {
         )
         .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
 
-        Ok(LoadedModule::from_dir(
-            &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        )?)
+        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
     }
 
     /// Force load this kernel module, and return the [`LoadedModule`]
@@ -582,10 +582,8 @@ impl ModuleFile {
                 | ModuleInitFlags::MODULE_INIT_IGNORE_VERMAGIC,
         )
         .map_err(|e| ModuleError::LoadError(self.name.clone(), e.to_string()))?;
-        //
-        Ok(LoadedModule::from_dir(
-            &Path::new(SYSFS_PATH).join("module").join(&self.name),
-        )?)
+
+        LoadedModule::from_dir(&Path::new(SYSFS_PATH).join("module").join(&self.name))
     }
 
     pub fn path(&self) -> &Path {
