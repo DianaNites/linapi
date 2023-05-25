@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `linapi::system::kernel_info` interface to `uname`
 
+### Changed
+
+- ***BREAKING*** Rewrote and replaced `linapi::system::modules` with `linapi::module` and `linapi::module_file`. This is the only breaking change
+- Updated all dependencies
+
 ## [0.5.3] - 2023-05-22
 
 ### Fixed

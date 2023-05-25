@@ -99,6 +99,7 @@ bitflags! {
     /// They will be documented here on a best-effort basis.
     ///
     /// [1]: https://www.kernel.org/doc/html/latest/block/capability.html
+    #[derive(Debug,Clone, Copy,PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct BlockCap: u32 {
         /// Set for removable media with permanent block devices
         ///
@@ -132,6 +133,14 @@ bitflags! {
 
         /// Unknown
         const HIDDEN = 1024;
+    }
+}
+
+impl BlockCap {
+    #[doc(hidden)]
+    #[deprecated(note = "Use from_bits_retain")]
+    pub const unsafe fn from_bits_unchecked(bits: u32) -> Self {
+        BlockCap::from_bits_retain(bits)
     }
 }
 
@@ -294,14 +303,12 @@ impl Block {
     /// See [`BlockCap`] for more details.
     pub fn capability(&self) -> Result<BlockCap> {
         // Unknown bits are safe, and the kernel may add new flags.
-        Ok(unsafe {
-            BlockCap::from_bits_unchecked(
-                std::fs::read_to_string(self.path.join("capability"))?
-                    .trim()
-                    .parse()
-                    .map_err(|_| Error::Invalid)?,
-            )
-        })
+        Ok(BlockCap::from_bits_retain(
+            std::fs::read_to_string(self.path.join("capability"))?
+                .trim()
+                .parse()
+                .map_err(|_| Error::Invalid)?,
+        ))
     }
 
     /// Get device power information
@@ -636,7 +643,7 @@ impl Power<'_> {
             .write(true)
             .open(self.path.join("power/autosuspend_delay_ms"))?;
         let f = write!(f, "{}", delay.as_millis());
-        if let nix::Error::Sys(nix::errno::Errno::EIO) = nix::Error::last() {
+        if let nix::Error::EIO = nix::Error::last() {
             return Ok(None);
         }
         f?;

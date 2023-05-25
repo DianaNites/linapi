@@ -1,6 +1,7 @@
 //! Error handling stuff
-use displaydoc::Display;
 use std::io;
+
+use displaydoc::Display;
 use thiserror::Error;
 
 /// Error type for [`crate::system::modules`]
@@ -17,19 +18,4 @@ pub enum ModuleError {
 
     /// Module was invalid: `{0}`
     InvalidModule(String),
-}
-
-/// Error text.
-pub(crate) mod text {
-    pub const INVALID_EXTENSION: &str = "invalid or missing extension";
-
-    pub const COMPRESSION: &str = "unsupported or invalid compression";
-
-    pub const NOT_FOUND: &str = "not found";
-
-    pub const NAME: &str = "invalid module name";
-
-    pub const PARAMETER: &str = "invalid module parameter name";
-
-    pub const MODINFO: &str = "invalid .modinfo";
 }

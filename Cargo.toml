@@ -13,16 +13,19 @@ keywords = ["linux", "kernel", "modules"]
 categories = ["api-bindings", "os::unix-apis"]
 
 [dependencies]
-nix = "0.17.0"
-libc = "0.2.68"
-bitflags = "1.2.1"
-walkdir = "2.3.1"
-thiserror = "1.0.13"
-displaydoc = "0.1.5"
-xmas-elf = "0.7.0"
-flate2 = { version = "1.0.14", optional = true }
-xz2 = { version = "0.1.6", optional = true }
-zstd = { version = "0.9.0", optional = true }
+nix = "0.26.2"
+libc = "0.2.144"
+bitflags = "2.3.1"
+walkdir = "2.3.3"
+thiserror = "1.0.40"
+displaydoc = "0.2.4"
+flate2 = { version = "1.0.26", optional = true }
+xz2 = { version = "0.1.7", optional = true }
+zstd = { version = "0.12.3", optional = true }
+elf = "0.7.2"
+der = "0.7.6"
+cms = "0.2.1"
+rustix = { version = "0.37.19", features = ["process"] }
 
 [features]
 default = ["compression"]
@@ -33,6 +36,9 @@ zst = ["zstd"]
 
 [badges]
 maintenance = { status = "experimental" }
+
+[dev-dependencies]
+anyhow = "1.0.71"
 
 [[package.metadata.release.pre-release-replacements]]
 file = "README.md"

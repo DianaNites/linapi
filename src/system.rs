@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use rustix::process::{uname as r_uname, Uname as RUname};
 
 pub mod devices;
-pub mod modules;
 
 /// Supported [`UEvent`] actions
 pub enum UEventAction {

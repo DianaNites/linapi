@@ -15,5 +15,7 @@
 pub mod error;
 pub mod extensions;
 
+pub mod module;
+pub mod module_file;
 pub mod system;
 mod util;
