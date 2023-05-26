@@ -11,11 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Module signature support
 - `linapi::system::kernel_info` interface to `uname`
+
+### Fixed
+
+- Failure to read module parameters without types, such as `loop`
+- Module dependencies information
+- Lots of `.modinfo` parsing
 
 ### Changed
 
-- ***BREAKING*** Rewrote and replaced `linapi::system::modules` with `linapi::module` and `linapi::module_file`. This is the only breaking change
+- ***BREAKING*** Rewrote and replaced `linapi::system::modules` with `linapi::module` and `linapi::module_file`
 - Updated all dependencies
 
 ## [0.5.3] - 2023-05-22
