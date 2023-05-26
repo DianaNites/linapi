@@ -31,7 +31,7 @@ linapi = "0.5.3"
 
 ### Dependencies
 
-- The Linux Kernel. This crate has only been tested with version `5.5.3`.
+- The Linux Kernel. This crate has only been tested with version `6.3`.
 
 ## Usage
 
