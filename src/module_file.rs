@@ -128,6 +128,9 @@ mod error {
 
         /// Missing module name
         MissingName(PathBuf),
+
+        /// There was an error reading the module
+        Module(ModInfoError),
     }
 
     impl fmt::Display for FromPathError {
@@ -135,11 +138,19 @@ mod error {
             match self {
                 Self::InvalidUTF8(p) => write!(f, "invalid UTF-8 in `{}`", p.display()),
                 Self::MissingName(p) => write!(f, "missing module name in `{}`", p.display()),
+                Self::Module(_) => write!(f, "an error reading the module"),
             }
         }
     }
 
-    impl error::Error for FromPathError {}
+    impl error::Error for FromPathError {
+        fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+            match self {
+                Self::Module(e) => Some(e),
+                _ => None,
+            }
+        }
+    }
 
     #[derive(Debug)]
     pub enum FromNameError {
@@ -485,6 +496,7 @@ impl ModuleFile {
     ///
     /// - [`FromPathError::MissingName`] if `path` is missing a file name
     /// - [`FromPathError::InvalidUTF8`] if `path` contains invalid UTF-8
+    /// - [`FromPathError::Module`] if reading the module fails
     pub fn from_path(path: &Path) -> Result<Self, FromPathError> {
         let _name = path
             .file_name()
@@ -492,7 +504,11 @@ impl ModuleFile {
             .to_str()
             .ok_or_else(|| FromPathError::InvalidUTF8(path.to_path_buf()))?;
 
-        todo!();
+        Ok(Self {
+            name: name.into(),
+            path: path.to_path_buf(),
+            info: ModInfo::read(path).map_err(FromPathError::Module)?,
+        })
     }
 }
 
